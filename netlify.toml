@@ -1,0 +1,14 @@
+[build]
+  publish = "."
+
+# service worker всегда свежий
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Permissions-Policy = "camera=(self), gyroscope=(self), accelerometer=(self)"
+    X-Content-Type-Options = "nosniff"
