@@ -63,8 +63,10 @@
 
   /* weapon chips */
   #chips{position:absolute;bottom:max(14px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
-    display:flex;gap:10px;pointer-events:auto}
-  .chip{position:relative;min-width:86px;padding:9px 12px 7px;text-align:center;cursor:pointer;
+    display:flex;gap:8px;pointer-events:auto;max-width:96vw;overflow-x:auto;padding:2px 6px;
+    touch-action:pan-x;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  #chips::-webkit-scrollbar{display:none}
+  .chip{position:relative;min-width:78px;flex:0 0 auto;padding:9px 10px 7px;text-align:center;cursor:pointer;
     border-radius:14px;border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(8px);
     font-family:inherit;color:#9fd8e8;font-size:9px;letter-spacing:.08em;overflow:hidden;transition:all .15s}
   .chip .ico{font-size:18px;display:block;margin-bottom:2px;filter:drop-shadow(0 0 6px rgba(25,240,255,.5))}
@@ -155,11 +157,7 @@
   </div>
   <button id="muteBtn">🔊</button>
   <div id="cross"><div class="ring"></div><div class="tick t1"></div><div class="tick t2"></div><div class="tick t3"></div><div class="tick t4"></div><div class="dot"></div></div>
-  <div id="chips">
-    <button class="chip" data-w="turret"><span class="ico">⚡</span>ТУРЕЛЬ<div class="bar"></div></button>
-    <button class="chip" data-w="rail"><span class="ico">🔱</span>РЕЛЬСОТРОН<div class="bar"></div></button>
-    <button class="chip" data-w="shotgun"><span class="ico">💥</span>ДРОБОВИК<div class="bar"></div></button>
-  </div>
+  <div id="chips"></div>
 </div>
 <div id="toast"></div>
 
@@ -202,7 +200,7 @@ import * as THREE from 'three';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '3.0.0';
+const VERSION = '4.0.0';
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
 const rand = (a,b)=>a+Math.random()*(b-a);
@@ -379,6 +377,7 @@ function audioInit(){
   AU.started = true;
   loadSamplePack(); // необязательные стоковые сэмплы из sfx/
   ambientStart();
+  atmoStart(); // атмосферный саундтрек: трек из music/ или генеративные пэды
 }
 /* Опциональный сэмпл-пак: положи лицензированные звуки в sfx/ и опиши их в
    sfx/manifest.json вида {"turret":["t1.mp3","t2.mp3"],"rail":[...],
@@ -548,6 +547,37 @@ const SFX = {
   },
   fanfare(pos){ const dest=spatialDest(pos);
     [523,659,784].forEach((f,i)=>tone({t:at()+i*.06,type:'square',f0:f,dur:.25,g:.1,dest})); },
+  laser(){ // классический бластер «как в кино про далёкую галактику»
+    tone({type:'square',f0:1700*rand(.97,1.03),f1:280,dur:.12,g:.14});
+    tone({type:'sine',f0:420,f1:90,dur:.1,g:.1}); },
+  vulcan(){ tone({type:'square',f0:520*rand(.93,1.07),f1:160,dur:.05,g:.11});
+    noiseHit({ft:'highpass',f0:3200,dur:.025,g:.07}); },
+  axe(){ noiseHit({ft:'bandpass',f0:600,f1:1500,dur:.28,g:.18,q:2});
+    tone({type:'sine',f0:90,f1:60,dur:.1,g:.12}); },
+  plasma(){ tone({type:'sine',f0:140,f1:60,dur:.3,g:.3});
+    fmBell({f:300,dur:.3,g:.08,ratio:1.5,idx:4}); },
+  arcZap(){ const d=distNode(4);
+    noiseHit({ft:'highpass',f0:2000,f1:6000,dur:.12,g:.22,dest:d});
+    tone({type:'sawtooth',f0:900,f1:90,dur:.14,g:.12}); },
+  freezeTick(){ fmBell({f:2400*rand(.9,1.2),dur:.18,g:.04,ratio:2.7,idx:2}); },
+  missile(){ noiseHit({ft:'lowpass',f0:3000,f1:600,dur:.3,g:.2});
+    tone({type:'sawtooth',f0:220,f1:90,dur:.25,g:.08}); },
+  flak(){ tone({type:'sine',f0:110,f1:40,dur:.2,g:.32});
+    noiseHit({ft:'bandpass',f0:700,f1:150,dur:.15,g:.2}); },
+  disc(){ fmBell({f:880,dur:.15,g:.08,ratio:3.3,idx:3});
+    noiseHit({ft:'highpass',f0:4000,dur:.05,g:.06}); },
+  needle(){ tone({type:'triangle',f0:2100*rand(.95,1.05),f1:900,dur:.07,g:.09}); },
+  gauss(){ const d=distNode(3);
+    noiseHit({ft:'lowpass',f0:7000,f1:300,dur:.18,g:.28,dest:d});
+    fmBell({f:340,dur:.25,g:.1,ratio:2.76,idx:4}); },
+  bfg(){ tone({type:'sawtooth',f0:70,f1:50,dur:.8,g:.28});
+    fmBell({f:160,dur:.7,g:.12,ratio:1.93,idx:5});
+    noiseHit({ft:'lowpass',f0:5000,f1:120,dur:.6,g:.28}); },
+  sing(){ tone({type:'sine',f0:200,f1:30,dur:1,g:.22});
+    tone({type:'sine',f0:207,f1:33,dur:1,g:.18}); },
+  boom(pos){ const dest=spatialDest(pos);
+    tone({type:'sine',f0:130,f1:35,dur:.4,g:.38,dest});
+    noiseHit({ft:'lowpass',f0:3500,f1:120,dur:.35,g:.28,dest}); },
   gull(){ if(!AU.started) return; const t0=at();
     tone({t:t0,type:'sine',f0:1400,f1:2400,dur:.12,g:.025});
     tone({t:t0+.15,type:'sine',f0:1600,f1:900,dur:.18,g:.02}); },
@@ -563,6 +593,52 @@ function ambientStart(){ // ветер
   s.connect(f); f.connect(g); g.connect(AU.master); s.start(); lfo.start();
   (function gulls(){ setTimeout(()=>{ if(state.mode==='play') SFX.gull(); gulls(); }, rand(9000,22000)); })();
 }
+/* атмосферная музыка: либо трек из music/ (см. README), либо генеративные
+   арктические пэды — медленная прогрессия Am–F–C–Em, три расстроенных
+   осциллятора через фильтр с LFO + посыл в реверб. */
+const atmo={on:false, next:0, chord:0, nodes:null, gain:null, sample:null};
+const ATMO_CHORDS=[[110,164.8,220,329.6],[87.3,130.8,174.6,261.6],[130.8,196,261.6,392],[82.4,123.5,164.8,246.9]];
+async function atmoStart(){
+  if(atmo.on||!AU.started) return;
+  atmo.on=true;
+  try{ // если в music/ лежит трек — играем его лупом
+    const man=await (await fetch('music/manifest.json')).json();
+    const ab=await (await fetch('music/'+man.tracks[(Math.random()*man.tracks.length)|0])).arrayBuffer();
+    const buf=await AU.ctx.decodeAudioData(ab);
+    const src=AU.ctx.createBufferSource(); src.buffer=buf; src.loop=true;
+    const g=AU.ctx.createGain(); g.gain.value=.22;
+    src.connect(g); g.connect(AU.master); src.start();
+    atmo.sample=src; atmo.gain=g;
+    return;
+  }catch(e){ /* трека нет — генерируем сами */ }
+  atmo.gain=AU.ctx.createGain(); atmo.gain.value=.05; // фоновый слой, не мешает игре
+  atmo.gain.connect(AU.master);
+  if(AU.reverb){ const s2=AU.ctx.createGain(); s2.gain.value=.8; atmo.gain.connect(s2); s2.connect(AU.reverb); }
+  atmoChord();
+}
+function atmoChord(){
+  if(!atmo.on||atmo.sample) return;
+  const t0=at(), dur=7.5, freqs=ATMO_CHORDS[atmo.chord%ATMO_CHORDS.length];
+  atmo.chord++;
+  for(const f of freqs){
+    for(const det of [-3,2]){ // пара расстроенных пил на голос
+      const o=AU.ctx.createOscillator(), g=AU.ctx.createGain(), fl=AU.ctx.createBiquadFilter();
+      o.type='sawtooth'; o.frequency.value=f; o.detune.value=det*3;
+      fl.type='lowpass'; fl.frequency.setValueAtTime(300,t0);
+      fl.frequency.linearRampToValueAtTime(900,t0+dur*.5);
+      fl.frequency.linearRampToValueAtTime(250,t0+dur);
+      g.gain.setValueAtTime(.0001,t0);
+      g.gain.linearRampToValueAtTime(.06,t0+dur*.35);
+      g.gain.linearRampToValueAtTime(.0001,t0+dur);
+      o.connect(fl); fl.connect(g); g.connect(atmo.gain);
+      o.start(t0); o.stop(t0+dur+.1);
+    }
+  }
+  // редкая «искра» — колокольчик поверх пэда
+  if(Math.random()<.7) fmBell({t:t0+rand(1,5), f:freqs[2]*4, dur:1.2, g:.025, ratio:2.01, idx:2, dest:atmo.gain});
+  setTimeout(atmoChord, (dur-1.2)*1000);
+}
+
 /* динамический саундтрек: бит просыпается вместе с комбо */
 const music = {next:0, step:0, bpm:132};
 const PENTA = [220, 261.6, 293.7, 329.6, 392];
@@ -753,7 +829,7 @@ function spawnFish(type, schoolId=null, near=null){
   const sys=fishSys[type], idx=sys.free.pop();
   if(idx===undefined) return null; // лимит вида исчерпан
   const sp=SPECIES[type];
-  const f={type, idx, alive:true, school:schoolId, fear:0, halo:null,
+  const f={type, idx, alive:true, school:schoolId, fear:0, halo:null, cold:0, freezeAcc:0,
     pos:new THREE.Vector3(), vel:new THREE.Vector3(),
     target:new THREE.Vector3(), anchor:new THREE.Vector3(),
     wag:rand(0,TAU), t:rand(0,TAU), size:rand(.9,1.15),
@@ -818,9 +894,10 @@ function updateFish(dt){
     _v1.copy(f.target).sub(p).normalize().multiplyScalar(f.speed);
     f.vel.lerp(_v1, clamp(dt*(f.fear>0?6:1.4),0,1));
     if(f.fear>0) f.fear-=dt;
-    p.addScaledVector(f.vel, dt);
+    if(f.cold>0) f.cold-=dt; else if(f.freezeAcc>0) f.freezeAcc=Math.max(0,f.freezeAcc-dt*.7);
+    p.addScaledVector(f.vel, dt*(f.cold>0?.3:1)); // в крио-луче рыба вязнет
     p.y += Math.sin(f.t*1.7)*dt*.25; // вертикальное покачивание
-    f.wag += dt*(3+f.vel.length()*4); // фаза виляния — шейдеру
+    f.wag += dt*(3+f.vel.length()*4)*(f.cold>0?.15:1); // в заморозке хвост почти стоит
     // запись матрицы инстанса
     _dummy.position.copy(p);
     if(f.vel.lengthSq()>.0001) _v1.copy(p).add(f.vel); else _v1.copy(f.target);
@@ -1033,124 +1110,365 @@ function toast(msg,t=1600){
   clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),t);
 }
 
-/* ---------------- орудия ---------------- */
+/* ================ ОРУДИЯ: 16 стволов, data-driven ================
+   Каждое орудие: процедурная модель (builder), режим огня
+   (auto / tap / charge / beam), снаряды через общий пул с поведениями
+   (гравитация, самонаведение, рикошет, пробитие, AoE, прокси-взрыватель,
+   сингулярность, крио-луч) и свой синтез звука.
+   Отдача: пружинит корпус + все части из userData.recoil. */
 const SKINS = {
   neon:  {body:0x16323f, glow:0x19f0ff, accent:0x40e0d0},
   chrome:{body:0x9aa7b8, glow:0xffffff, accent:0xcfe6ff},
   rust:  {body:0x5a3a22, glow:0xff8844, accent:0xcc6633}
 };
+const ACC={
+  red:   new THREE.MeshBasicMaterial({color:0xff4040}),
+  green: new THREE.MeshBasicMaterial({color:0x6aff6a}),
+  pink:  new THREE.MeshBasicMaterial({color:0xff7bd5}),
+  ice:   new THREE.MeshBasicMaterial({color:0xbfeaff}),
+  orange:new THREE.MeshBasicMaterial({color:0xffaa44}),
+  violet:new THREE.MeshBasicMaterial({color:0xb88cff}),
+  dark:  new THREE.MeshPhongMaterial({color:0x222a33, shininess:120, specular:0xaaccee})
+};
 const weaponRoot = new THREE.Group();
 weaponRoot.position.set(0,-.42,-.9); camera.add(weaponRoot);
-const wm = {}; // материалы орудий (перекрашиваются скином)
+const wm = {}; // материалы скина
+
+function part(geo, mat, sx,sy,sz, px=0,py=0,pz=0, rx=0,ry=0,rz=0){
+  const m=new THREE.Mesh(geo,mat);
+  m.scale.set(sx,sy,sz); m.position.set(px,py,pz); m.rotation.set(rx,ry,rz);
+  return m;
+}
+
+/* ---- реестр орудий: данные + поведение ---- */
+const W = {
+  turret: {name:'ТУРЕЛЬ',     ico:'⚡', unlock:0,     mode:'auto',   cd:.16,  color:0x19f0ff, side:0},
+  laser:  {name:'БЛАСТЕР',    ico:'🔴', unlock:1000,  mode:'auto',   cd:.13,  color:0xff4040},
+  rail:   {name:'РЕЛЬСОТРОН', ico:'🔱', unlock:2000,  mode:'charge', cd:0,    color:0xb0f8ff, reload:0, reloadMax:1.5},
+  axe:    {name:'ТОПОР',      ico:'🪓', unlock:3500,  mode:'tap',    cd:.55,  color:0xffaa44},
+  shotgun:{name:'ДРОБОВИК',   ico:'💥', unlock:5000,  mode:'tap',    cd:.55,  color:0xff9d4d},
+  plasma: {name:'ПЛАЗМОМЁТ',  ico:'🟢', unlock:6500,  mode:'tap',    cd:.7,   color:0x6aff6a},
+  vulcan: {name:'ВУЛКАН',     ico:'🌀', unlock:8000,  mode:'auto',   cd:.055, color:0xfff0a0, spinup:.45, spin:0},
+  arc:    {name:'ТЕСЛА',      ico:'🌩', unlock:9000,  mode:'tap',    cd:.6,   color:0xd0e8ff},
+  flak:   {name:'ФЛАК',       ico:'🎆', unlock:11000, mode:'tap',    cd:.6,   color:0xffc266},
+  homing: {name:'РОЙ',        ico:'🚀', unlock:12000, mode:'tap',    cd:.9,   color:0xff8866},
+  disc:   {name:'ДИСК',       ico:'💿', unlock:14000, mode:'tap',    cd:.7,   color:0x7ef2e0},
+  freeze: {name:'КРИО-ЛУЧ',   ico:'❄️', unlock:15000, mode:'beam',   cd:0,    color:0xbfeaff, beaming:false, tick:0},
+  needler:{name:'ИГЛОМЁТ',    ico:'📌', unlock:16000, mode:'auto',   cd:.18,  color:0xff7bd5},
+  gauss:  {name:'ГАУСС',      ico:'🎯', unlock:18000, mode:'tap',    cd:.5,   color:0xeaf6ff},
+  bfg:    {name:'БФГ-МИНИ',   ico:'☢️', unlock:20000, mode:'charge', cd:0,    color:0x6aff6a, reload:0, reloadMax:1},
+  sing:   {name:'СИНГУЛЯРНОСТЬ',ico:'🕳️',unlock:25000,mode:'tap',    cd:1.4,  color:0xb88cff}
+};
+let curWeapon='turret', wcool=0;
+
+/* ---- модели ---- */
+const BUILD = {
+  turret(){ // сдвоенная фотонная — стволы откатываются попеременно
+    const g=new THREE.Group(); g.userData.recoil=[];
+    for(const s of [-1,1]){
+      const pod=new THREE.Group(); pod.position.set(s*.30,0,0);
+      pod.add(part(GEO.box, wm.body, .12,.1,.22));
+      const barrel=new THREE.Group(); barrel.position.z=-.1;
+      barrel.add(part(GEO.cyl, wm.body, .035,.3,.035, 0,0,-.15, Math.PI/2,0,0));
+      for(let i=0;i<3;i++) barrel.add(part(new THREE.TorusGeometry(.05,.012,6,14), wm.glow, 1,1,1, 0,0,-.08-i*.09));
+      pod.add(barrel); g.add(pod); g.userData.recoil.push(barrel);
+    }
+    return g;
+  },
+  laser(){ // лазерная турель в духе «Звёздных войн»: спаренные длинные стволы
+    const g=new THREE.Group(); g.userData.recoil=[];
+    g.add(part(GEO.box, wm.body, .16,.12,.16, 0,-.04,.06));
+    for(const s of [-1,1]){
+      const b=new THREE.Group(); b.position.set(s*.07,.02,0);
+      b.add(part(GEO.cyl, ACC.dark, .022,.5,.022, 0,0,-.25, Math.PI/2,0,0));
+      b.add(part(GEO.cyl, ACC.red, .028,.04,.028, 0,0,-.5, Math.PI/2,0,0)); // дульный кончик
+      b.add(part(GEO.box, wm.body, .03,.05,.14, 0,-.03,-.05));
+      g.add(b); g.userData.recoil.push(b);
+    }
+    g.add(part(GEO.box, ACC.dark, .05,.08,.1, 0,.07,.05)); // прицел-башенка
+    return g;
+  },
+  rail(){
+    const g=new THREE.Group(); g.userData.caps=[]; g.userData.recoil=[];
+    const barrel=new THREE.Group();
+    barrel.add(part(GEO.cyl, wm.body, .07,.5,.07, 0,0,-.2, Math.PI/2,0,0));
+    barrel.add(part(GEO.cone, wm.glow, .05,.1,.05, 0,0,-.5, -Math.PI/2,0,0));
+    g.add(barrel); g.userData.recoil.push(barrel);
+    for(const s of [-1,1]){
+      const cap=part(GEO.box, new THREE.MeshLambertMaterial({color:0x16323f, emissive:0x000000}), .07,.12,.3, s*.13,-.02,-.15);
+      g.add(cap); g.userData.caps.push(cap);
+    }
+    return g;
+  },
+  axe(){ // метатель: люлька с парящим топором, топор медленно вращается
+    const g=new THREE.Group(); g.userData.recoil=[];
+    g.add(part(GEO.box, wm.body, .14,.06,.2, 0,-.06,0));
+    g.add(part(GEO.cone, wm.glow, .03,.08,.03, -.09,.02,0));
+    g.add(part(GEO.cone, wm.glow, .03,.08,.03, .09,.02,0));
+    const ax=new THREE.Group(); ax.position.y=.06;
+    ax.add(part(GEO.cyl, ACC.dark, .013,.26,.013));
+    ax.add(part(GEO.cone, ACC.orange, .1,.05,.02, .05,.1,0, 0,0,-Math.PI/2));
+    ax.add(part(GEO.cone, ACC.orange, .1,.05,.02, -.05,.1,0, 0,0,Math.PI/2));
+    g.add(ax); g.userData.idleSpin=ax; g.userData.recoil.push(ax);
+    return g;
+  },
+  shotgun(){
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const bell=new THREE.Group();
+    bell.add(part(GEO.cyl, wm.body, .12,.26,.12, 0,0,-.12, Math.PI/2,0,0));
+    for(let i=0;i<3;i++){
+      const a=i*TAU/3+Math.PI/6;
+      bell.add(part(GEO.cyl, wm.glow, .03,.08,.03, Math.cos(a)*.06,Math.sin(a)*.06,-.27, Math.PI/2,0,0));
+    }
+    g.add(bell); g.userData.recoil.push(bell);
+    return g;
+  },
+  plasma(){
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const tube=new THREE.Group();
+    tube.add(part(GEO.cyl, wm.body, .1,.3,.1, 0,0,-.15, Math.PI/2,0,0));
+    tube.add(part(GEO.sphere, ACC.green, .07,.07,.07, 0,0,-.32));
+    g.add(tube); g.add(part(GEO.sphere, ACC.green, .09,.09,.09, 0,.05,.1));
+    g.userData.recoil.push(tube);
+    return g;
+  },
+  vulcan(){ // шесть стволов, раскручиваются перед огнём
+    const g=new THREE.Group(); g.userData.recoil=[];
+    g.add(part(GEO.box, wm.body, .16,.14,.2, 0,-.02,.08));
+    g.add(part(GEO.cyl, ACC.dark, .09,.12,.09, .12,-.04,.08, 0,0,Math.PI/2)); // барабан
+    const spin=new THREE.Group(); spin.position.z=-.18;
+    for(let i=0;i<6;i++){
+      const a=i*TAU/6;
+      spin.add(part(GEO.cyl, ACC.dark, .018,.4,.018, Math.cos(a)*.05,Math.sin(a)*.05,-.05, Math.PI/2,0,0));
+    }
+    spin.add(part(GEO.cyl, wm.glow, .065,.03,.065, 0,0,-.26, Math.PI/2,0,0));
+    g.add(spin); g.userData.spinGrp=spin; g.userData.recoil.push(spin);
+    return g;
+  },
+  arc(){ // тесла: два электрода и дуговое ядро
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const head=new THREE.Group();
+    head.add(part(GEO.box, wm.body, .12,.1,.18, 0,0,.02));
+    for(const s of [-1,1]) head.add(part(GEO.cone, wm.glow, .025,.22,.025, s*.07,.02,-.18, Math.PI/2.3,0,0));
+    head.add(part(GEO.sphere, ACC.ice, .045,.045,.045, 0,.03,-.14));
+    g.add(head); g.userData.recoil.push(head);
+    return g;
+  },
+  flak(){ // зенитка: спарка под углом + магазин
+    const g=new THREE.Group(); g.userData.recoil=[];
+    g.add(part(GEO.box, wm.body, .16,.08,.16, 0,-.05,.04));
+    for(const s of [-1,1]){
+      const b=new THREE.Group(); b.position.set(s*.05,0,0); b.rotation.x=-.12;
+      b.add(part(GEO.cyl, ACC.dark, .03,.42,.03, 0,0,-.21, Math.PI/2,0,0));
+      b.add(part(GEO.box, wm.glow, .045,.045,.03, 0,0,-.4));
+      g.add(b); g.userData.recoil.push(b);
+    }
+    g.add(part(GEO.box, ACC.dark, .08,.12,.1, 0,-.12,.06));
+    return g;
+  },
+  homing(){ // короб с шестью трубами
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const box=new THREE.Group();
+    box.add(part(GEO.box, wm.body, .22,.15,.26));
+    for(let i=0;i<6;i++){
+      const x=(i%3-1)*.06, y=(i<3?.04:-.04);
+      box.add(part(GEO.cyl, ACC.dark, .022,.06,.022, x,y,-.14, Math.PI/2,0,0));
+    }
+    box.add(part(GEO.box, wm.glow, .22,.01,.01, 0,.08,-.1));
+    g.add(box); g.userData.recoil.push(box);
+    return g;
+  },
+  disc(){ // плоский эмиттер с прорезью
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const h=new THREE.Group();
+    h.add(part(new THREE.TorusGeometry(.11,.025,8,22), wm.body, 1,1,1, 0,.02,-.06));
+    h.add(part(GEO.cyl, ACC.ice, .08,.012,.08, 0,.02,-.06, Math.PI/2,0,0));
+    h.add(part(GEO.box, wm.body, .1,.08,.16, 0,-.06,.06));
+    g.add(h); g.userData.recoil.push(h);
+    return g;
+  },
+  freeze(){ // крио: кластер ледяных кристаллов
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const cr=new THREE.Group();
+    cr.add(part(GEO.cyl, wm.body, .08,.24,.08, 0,0,-.1, Math.PI/2,0,0));
+    for(let i=0;i<3;i++){
+      const a=i*TAU/3;
+      cr.add(part(GEO.cone, ACC.ice, .03,.16,.03, Math.cos(a)*.05,Math.sin(a)*.05,-.26, Math.PI/2,0,0));
+    }
+    g.add(cr); g.userData.recoil.push(cr);
+    return g;
+  },
+  needler(){ // органический игломёт
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const h=new THREE.Group();
+    h.add(part(GEO.sphere, wm.body, .11,.09,.16, 0,0,-.02));
+    for(let i=0;i<7;i++){
+      const a=i*TAU/7;
+      h.add(part(GEO.cone, ACC.pink, .015,.14,.015, Math.cos(a)*.07,.04+Math.sin(a)*.03,-.1, Math.PI/2.4,0,0));
+    }
+    g.add(h); g.userData.recoil.push(h);
+    return g;
+  },
+  gauss(){ // длинный тонкий ствол с катушками
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const b=new THREE.Group();
+    b.add(part(GEO.cyl, ACC.dark, .025,.6,.025, 0,0,-.28, Math.PI/2,0,0));
+    for(let i=0;i<3;i++) b.add(part(new THREE.TorusGeometry(.05,.014,6,14), wm.glow, 1,1,1, 0,0,-.14-i*.14));
+    b.add(part(GEO.box, wm.body, .07,.09,.16, 0,-.05,.04));
+    g.add(b); g.userData.recoil.push(b);
+    return g;
+  },
+  bfg(){ // шарокамера + толстый ствол
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const b=new THREE.Group();
+    b.add(part(GEO.sphere, wm.body, .14,.14,.14, 0,0,.06));
+    const chamber=part(GEO.sphere, ACC.green, .09,.09,.09, 0,0,.06);
+    b.add(chamber); g.userData.chamber=chamber;
+    b.add(part(GEO.cyl, wm.body, .08,.3,.08, 0,0,-.2, Math.PI/2,0,0));
+    b.add(part(GEO.cyl, ACC.green, .055,.02,.055, 0,0,-.36, Math.PI/2,0,0));
+    g.add(b); g.userData.recoil.push(b);
+    return g;
+  },
+  sing(){ // кольцо с парящей чёрной сферой
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const r=new THREE.Group();
+    r.add(part(new THREE.TorusGeometry(.1,.02,8,24), ACC.violet, 1,1,1, 0,.02,-.16));
+    const orb=part(GEO.sphere, new THREE.MeshBasicMaterial({color:0x080812}), .05,.05,.05, 0,.02,-.16);
+    r.add(orb); g.userData.orb=orb;
+    r.add(part(GEO.box, wm.body, .1,.08,.18, 0,-.06,.02));
+    g.add(r); g.userData.recoil.push(r);
+    return g;
+  }
+};
 function buildWeapons(){
   const sk = SKINS[save.skin]||SKINS.neon;
-  wm.body = new THREE.MeshLambertMaterial({color:sk.body});
+  // глянцевый металл с бликом — оружие ловит свет, а не выглядит пластилином
+  wm.body = new THREE.MeshPhongMaterial({color:sk.body, shininess:90, specular:0x88bbdd,
+    emissive:sk.body, emissiveIntensity:.12});
   wm.glow = new THREE.MeshBasicMaterial({color:sk.glow});
-  wm.accent = new THREE.MeshLambertMaterial({color:sk.accent, emissive:sk.body});
   while(weaponRoot.children.length) weaponRoot.remove(weaponRoot.children[0]);
-
-  // — сдвоенная фотонная турель —
-  const turret = new THREE.Group();
-  turret.userData.barrels=[];
-  for(const s of [-1,1]){
-    const pod=new THREE.Group(); pod.position.set(s*.30,0,0);
-    const base=new THREE.Mesh(GEO.box, wm.body); base.scale.set(.12,.1,.22); pod.add(base);
-    const barrel=new THREE.Group(); barrel.position.z=-.1;
-    const tube=new THREE.Mesh(GEO.cyl, wm.body); tube.scale.set(.035,.3,.035);
-    tube.rotation.x=Math.PI/2; tube.position.z=-.15; barrel.add(tube);
-    for(let i=0;i<3;i++){
-      const ring=new THREE.Mesh(new THREE.TorusGeometry(.05,.012,6,14), wm.glow);
-      ring.position.z=-.08-i*.09; barrel.add(ring);
-    }
-    pod.add(barrel); turret.add(pod);
-    turret.userData.barrels.push(barrel);
-  }
-  // — рельсотрон —
-  const rail = new THREE.Group();
-  const rbody=new THREE.Mesh(GEO.cyl, wm.body); rbody.scale.set(.07,.5,.07);
-  rbody.rotation.x=Math.PI/2; rbody.position.z=-.2; rail.add(rbody);
-  const tip=new THREE.Mesh(GEO.cone, wm.glow); tip.scale.set(.05,.1,.05);
-  tip.rotation.x=-Math.PI/2; tip.position.z=-.5; rail.add(tip);
-  rail.userData.caps=[];
-  for(const s of [-1,1]){
-    const cap=new THREE.Mesh(GEO.box, new THREE.MeshLambertMaterial({color:sk.body, emissive:0x000000}));
-    cap.scale.set(.07,.12,.3); cap.position.set(s*.13,-.02,-.15); rail.add(cap);
-    rail.userData.caps.push(cap);
-  }
-  // — плазменный дробовик —
-  const sg = new THREE.Group();
-  const bell=new THREE.Mesh(GEO.cyl, wm.body); bell.scale.set(.12,.26,.12);
-  bell.rotation.x=Math.PI/2; bell.position.z=-.12; sg.add(bell);
-  for(let i=0;i<3;i++){
-    const a=i*TAU/3+Math.PI/6;
-    const muzzle=new THREE.Mesh(GEO.cyl, wm.glow); muzzle.scale.set(.03,.08,.03);
-    muzzle.rotation.x=Math.PI/2; muzzle.position.set(Math.cos(a)*.06,Math.sin(a)*.06,-.27); sg.add(muzzle);
-  }
-  // деталировка: энерго-ядро, радиатор-гребёнка, голографический прицел
-  for(const wpn of [turret,rail,sg]){
-    const core=new THREE.Mesh(GEO.sphere, wm.glow);
-    core.scale.setScalar(.045); core.position.set(0,.07,.02);
-    wpn.add(core); wpn.userData.core=core;
-    for(let i=0;i<4;i++){
-      const fin=new THREE.Mesh(GEO.box, wm.body);
-      fin.scale.set(.09,.015,.06); fin.position.set(0,-.07-i*.022,.05); wpn.add(fin);
-    }
+  for(const k in W){
+    const m=BUILD[k]();
+    // деталировка: энерго-ядро + радиатор-гребёнка
+    const core=part(GEO.sphere, wm.glow, .04,.04,.04, 0,.08,.06);
+    m.add(core); m.userData.core=core;
+    for(let i=0;i<3;i++) m.add(part(GEO.box, wm.body, .08,.013,.05, 0,-.08-i*.02,.06));
+    m.visible=false; weaponRoot.add(m); W[k].model=m;
   }
   const holo=new THREE.Mesh(new THREE.TorusGeometry(.055,.0045,6,24),
     new THREE.MeshBasicMaterial({color:sk.glow,transparent:true,opacity:.45,
       blending:THREE.AdditiveBlending,depthWrite:false}));
   holo.position.set(0,.12,-.55);
   weaponRoot.add(holo); weaponRoot.userData.holo=holo;
-  weaponRoot.add(turret,rail,sg);
-  W.turret.model=turret; W.rail.model=rail; W.shotgun.model=sg;
   setWeapon(curWeapon,true);
 }
-const W = {
-  turret: {unlock:0,    cd:.16, recoil:0, side:0},
-  rail:   {unlock:2000, cd:0,   recoil:0, charge:0, charging:false, reload:0, chargeSnd:null},
-  shotgun:{unlock:5000, cd:.55, recoil:0}
-};
-let curWeapon='turret', wcool=0;
 function setWeapon(name, silent){
   if(totalScore() < W[name].unlock){ if(!silent) toast('🔒 нужно '+W[name].unlock+' очков всего'); return; }
-  if(W.rail.chargeSnd){ W.rail.chargeSnd.stop(); W.rail.chargeSnd=null; W.rail.charging=false; }
-  curWeapon=name;
-  for(const k in W) if(W[k].model) W[k].model.visible = (k===name);
-  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel', c.dataset.w===name));
+  stopAllCharge();
+  curWeapon=name; wcool=Math.min(wcool,.2);
+  for(const k in W){ if(W[k].model) W[k].model.visible=(k===name); W[k].beaming=false; }
+  for(const c of chipEls){
+    const sel=c.dataset.w===name;
+    c.classList.toggle('sel', sel);
+    if(sel) c.scrollIntoView({inline:'center', block:'nearest', behavior:'smooth'});
+  }
   if(!silent) SFX.combo(3);
+}
+function stopAllCharge(){
+  for(const k in W){
+    const wd=W[k];
+    if(wd.charging){ wd.charging=false; wd.charge=0;
+      if(wd.chargeSnd){ wd.chargeSnd.stop(); wd.chargeSnd=null; } }
+  }
+}
+
+/* чипы орудий генерируются из реестра, ряд прокручивается */
+const chipsBox=$('chips');
+for(const k in W){
+  const b=document.createElement('button');
+  b.className='chip'; b.dataset.w=k;
+  b.innerHTML='<span class="ico">'+W[k].ico+'</span>'+W[k].name+'<div class="bar"></div>';
+  b.addEventListener('pointerdown', e=>e.stopPropagation());
+  b.addEventListener('click', e=>{ e.stopPropagation(); setWeapon(k); });
+  chipsBox.appendChild(b);
 }
 const chipEls=[...document.querySelectorAll('.chip')];
 for(const c of chipEls) c._bar=c.querySelector('.bar');
+
 const muzzleLight = new THREE.PointLight(0x19f0ff, 0, 6); camera.add(muzzleLight);
 muzzleLight.position.set(0,-.3,-1.4);
 let muzzleFrames=0;
+function flashMuzzle(color){ muzzleLight.color.set(color); muzzleLight.intensity=14; muzzleFrames=2; }
 
-/* снаряды */
+/* ---- пул снарядов с «скинами»: болт / топор / диск / орб ---- */
 const bolts=[];
-for(let i=0;i<32;i++){
+function makeProj(skin){
   const g=new THREE.Group();
-  const core=new THREE.Mesh(GEO.cyl, new THREE.MeshBasicMaterial({color:0x9ffcff}));
-  core.scale.set(.025,.3,.025); core.rotation.x=Math.PI/2; g.add(core);
   const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:TEX_SOFT,color:0x19f0ff,
     transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
   glow.scale.setScalar(.35); g.add(glow);
+  const e={m:g, glow, vel:new THREE.Vector3(), life:0, skin, weapon:'turret'};
+  if(skin==='bolt'){
+    e.core=part(GEO.cyl, new THREE.MeshBasicMaterial({color:0x9ffcff}), .025,.3,.025, 0,0,0, Math.PI/2,0,0);
+    g.add(e.core);
+  }else if(skin==='axe'){
+    const ax=new THREE.Group();
+    ax.add(part(GEO.cyl, ACC.dark, .02,.4,.02));
+    ax.add(part(GEO.cone, ACC.orange, .16,.09,.03, .08,.16,0, 0,0,-Math.PI/2));
+    ax.add(part(GEO.cone, ACC.orange, .16,.09,.03, -.08,.16,0, 0,0,Math.PI/2));
+    g.add(ax); e.spinMesh=ax;
+  }else if(skin==='disc'){
+    e.spinMesh=part(GEO.cyl, new THREE.MeshBasicMaterial({color:0x7ef2e0}), .22,.02,.22, 0,0,0, Math.PI/2,0,0);
+    g.add(e.spinMesh);
+  }else if(skin==='orb'){
+    e.core=part(GEO.sphere, new THREE.MeshBasicMaterial({color:0x6aff6a}), .12,.12,.12);
+    g.add(e.core);
+  }
   g.visible=false; scene.add(g);
-  bolts.push({m:g, core, glow, vel:new THREE.Vector3(), life:0, kind:'bolt'});
+  bolts.push(e);
 }
-function fireBolt(origin, dir, speed, color, kind){
-  const b=bolts.find(b=>b.life<=0); if(!b) return;
-  b.life=2.2; b.kind=kind;
-  b.m.visible=true; b.m.position.copy(origin);
-  b.core.material.color.set(0xffffff); b.glow.material.color.set(color);
-  b.glow.material.opacity=1;
-  b.glow.scale.setScalar(kind==='pellet'?.22:.35);
-  b.vel.copy(dir).multiplyScalar(speed);
-  b.m.lookAt(_v1.copy(origin).add(dir));
+for(let i=0;i<26;i++) makeProj('bolt');
+for(let i=0;i<4;i++) makeProj('axe');
+for(let i=0;i<4;i++) makeProj('disc');
+for(let i=0;i<6;i++) makeProj('orb');
+
+function fireProj(o){
+  const b=bolts.find(b=>b.life<=0 && b.skin===(o.skin||'bolt'));
+  if(!b) return null;
+  b.life=o.life||2.2; b.weapon=o.weapon; b.speed0=o.speed;
+  b.grav=o.grav||0; b.homing=o.homing||0; b.pierce=o.pierce||0;
+  b.ricochet=o.ricochet||0; b.aoe=o.aoe||0; b.prox=o.prox||0;
+  b.suck=o.suck||0; b.melt=o.melt||0; b.boomEnd=!!o.boomEnd; b.spin=o.spin||0;
+  b.m.visible=true; b.m.position.copy(o.origin);
+  b.glow.material.color.set(o.color); b.glow.material.opacity=1;
+  b.glow.scale.setScalar(o.glowScale||.35);
+  if(b.core){ b.core.material.color.set(o.coreColor||0xffffff);
+    if(b.skin==='orb') b.core.scale.setScalar(o.orbScale||.12); }
+  b.vel.copy(o.dir).multiplyScalar(o.speed);
+  b.m.lookAt(_v1.copy(o.origin).add(o.dir));
+  return b;
 }
-const beam = new THREE.Mesh(GEO.cyl, new THREE.MeshBasicMaterial({color:0xb0f8ff,transparent:true,
-  opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
-beam.visible=false; scene.add(beam);
-let beamLife=0;
+
+/* лучи (рельса/гаусс/тесла) — пул тонких цилиндров */
+const beams=[];
+for(let i=0;i<6;i++){
+  const m=new THREE.Mesh(GEO.cyl, new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,
+    opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
+  m.visible=false; scene.add(m); beams.push({m,life:0,max:.15});
+}
+function beamLine(a,bp,color,w=.05,life=.15){
+  const e=beams.find(x=>x.life<=0); if(!e) return;
+  e.life=e.max=life; e.m.visible=true; e.m.material.color.set(color);
+  const len=Math.max(.01,a.distanceTo(bp));
+  e.m.scale.set(w,len,w);
+  e.m.position.copy(a).add(bp).multiplyScalar(.5);
+  e.m.lookAt(bp); e.m.rotateX(Math.PI/2);
+  e.m.material.opacity=.9;
+}
+/* конус крио-луча */
+const cryoCone=new THREE.Mesh(GEO.cone, new THREE.MeshBasicMaterial({color:0xbfeaff,transparent:true,
+  opacity:.15,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+cryoCone.visible=false; scene.add(cryoCone);
 
 function muzzleWorld(){
   weaponRoot.updateWorldMatrix(true,false);
@@ -1158,8 +1476,7 @@ function muzzleWorld(){
 }
 const ray = new THREE.Raycaster();
 function aimDir(){ return camera.getWorldDirection(_v3).clone(); }
-/* «супернаведение»: мягкий магнетизм прицела к ближайшей рыбе.
-   Фугу сознательно не притягивает — в бомбу попадаешь только сам. */
+/* «супернаведение»: мягкий магнетизм прицела; фугу не притягивает */
 function assistDir(dir, maxAngle=3*DEG, bend=.6){
   let best=null, bestAng=maxAngle;
   for(const f of fishes){
@@ -1171,119 +1488,301 @@ function assistDir(dir, maxAngle=3*DEG, bend=.6){
   if(best) dir.lerp(best,bend).normalize();
   return dir;
 }
+function convergedDir(origin, dist=25, assist=3){
+  const dir=assistDir(aimDir(), assist*DEG);
+  return camera.getWorldPosition(_v1).clone().addScaledVector(dir,dist).sub(origin).normalize();
+}
+function kick(model, dz=.1, rx=0){ // отдача: корпус + объявленные части
+  model.position.z+=dz; model.rotation.x+=rx;
+  if(model.userData.recoil) for(const p of model.userData.recoil) p.position.z+=dz*.7;
+}
+function nearestFish(p, maxD, skipFugu=true){
+  let best=null, bd=maxD*maxD;
+  for(const f of fishes){
+    if(skipFugu && f.type==='fugu') continue;
+    const d2=f.pos.distanceToSquared(p);
+    if(d2<bd){ bd=d2; best=f; }
+  }
+  return best;
+}
 
-function shootTurret(){
-  const w=W.turret;
-  if(wcool>0) return;
-  wcool=w.cd; w.side=1-w.side;
-  const barrel=w.model.userData.barrels[w.side];
-  barrel.position.z=.07; // откат ствола ~7 см
-  const dir=assistDir(aimDir());
-  const o=muzzleWorld().clone().addScaledVector(dir,.5);
-  // разнос подов: смещение вдоль локальной оси X камеры
-  o.addScaledVector(_v1.setFromMatrixColumn(camera.matrixWorld,0), w.side?-.12:.12);
-  // сведение к точке прицела на 25 м — болт летит точно в перекрестье
-  const aim=camera.getWorldPosition(_v1).clone().addScaledVector(dir,25);
-  fireBolt(o, aim.sub(o).normalize(), 38, 0x19f0ff, 'bolt');
-  state.shots++; flashMuzzle(0x19f0ff);
-  SFX.pew(); vibrate(12);
+/* ---- огонь по орудиям ---- */
+const FIRE = {
+  turret(){
+    const w=W.turret; w.side=1-w.side;
+    const dir=aimDir();
+    const o=muzzleWorld().clone().addScaledVector(dir,.5)
+      .addScaledVector(_v1.setFromMatrixColumn(camera.matrixWorld,0), w.side?-.12:.12);
+    fireProj({weapon:'turret', origin:o, dir:convergedDir(o), speed:38, color:0x19f0ff});
+    kick(w.model,.07); flashMuzzle(0x19f0ff); SFX.pew(); vibrate(12);
+  },
+  laser(){ // спаренные красные болты-чёрточки
+    const w=W.laser;
+    const dir=aimDir();
+    for(const s of [-1,1]){
+      const o=muzzleWorld().clone().addScaledVector(dir,.55)
+        .addScaledVector(_v1.setFromMatrixColumn(camera.matrixWorld,0), s*.05);
+      fireProj({weapon:'laser', origin:o, dir:convergedDir(o,30), speed:55, color:0xff3030,
+        coreColor:0xff6060, glowScale:.28, life:1.6});
+    }
+    kick(w.model,.05); flashMuzzle(0xff3030); SFX.laser(); vibrate(10);
+  },
+  shotgun(){
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
+    const base=convergedDir(o,12);
+    for(let i=0;i<7;i++){
+      const d=base.clone().add(_v1.set(rand(-.5,.5),rand(-.5,.5),rand(-.5,.5)).multiplyScalar(.21)).normalize();
+      fireProj({weapon:'shotgun', origin:o, dir:d, speed:30, color:0xff9d4d, glowScale:.22, life:.9});
+    }
+    kick(W.shotgun.model,.12,-.18); flashMuzzle(0xff9d4d); SFX.shotgun(); vibrate(25); shake(3,.08);
+  },
+  axe(){ // топор: дуга с гравитацией, кувыркается, пробивает двоих
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.4);
+    const d=convergedDir(o,14).add(_v1.set(0,.18,0)).normalize(); // бросок чуть вверх
+    fireProj({weapon:'axe', skin:'axe', origin:o, dir:d, speed:20, color:0xffaa44,
+      glowScale:.3, life:1.8, grav:9, spin:14, pierce:2});
+    kick(W.axe.model,.1,-.25); SFX.axe(); vibrate(18);
+  },
+  plasma(){ // медленный шар, взрыв по площади
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
+    fireProj({weapon:'plasma', skin:'orb', origin:o, dir:convergedDir(o,18), speed:13,
+      color:0x6aff6a, coreColor:0xb0ffb0, glowScale:.7, life:2.2, aoe:2.4, boomEnd:true});
+    kick(W.plasma.model,.12); flashMuzzle(0x6aff6a); SFX.plasma(); vibrate(20);
+  },
+  vulcan(){ // ливень слабых болтов, разброс растёт с темпом
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.55);
+    const d=convergedDir(o,25,2).add(_v1.set(rand(-1,1),rand(-1,1),rand(-1,1)).multiplyScalar(.018)).normalize();
+    fireProj({weapon:'vulcan', origin:o, dir:d, speed:46, color:0xfff0a0, glowScale:.22, life:1.4});
+    kick(W.vulcan.model,.02); flashMuzzle(0xfff0a0); SFX.vulcan(); vibrate(6);
+  },
+  arc(){ // цепная молния: до 3 целей
+    const dir=assistDir(aimDir(), 8*DEG, .9);
+    const camP=camera.getWorldPosition(_v1).clone();
+    let from=muzzleWorld().clone().addScaledVector(dir,.4), hits=0, prev=null;
+    let target=null;
+    { // первая цель — ближайшая к лучу
+      ray.set(camP, dir);
+      let bd=1.2;
+      for(const f of fishes){
+        const d=Math.sqrt(ray.ray.distanceSqToPoint(f.pos));
+        if(d<bd){ bd=d; target=f; }
+      }
+    }
+    while(target && hits<3){
+      beamLine(from, target.pos, 0xd0e8ff, .03+rand(0,.02), .18);
+      from=target.pos.clone();
+      const victim=target;
+      target=nearestFish(from, 6);
+      if(target===victim) target=null;
+      hitFish(victim,'arc'); state.hits++; hits++;
+    }
+    if(!hits) beamLine(from, camP.addScaledVector(dir,30), 0xd0e8ff, .02, .12);
+    kick(W.arc.model,.08); flashMuzzle(0xd0e8ff); SFX.arcZap(); vibrate([10,20,10]);
+  },
+  flak(){ // прокси-взрыватель: рвётся возле цели
+    const dir=aimDir();
+    for(const s of [-1,1]){
+      const o=muzzleWorld().clone().addScaledVector(dir,.5)
+        .addScaledVector(_v1.setFromMatrixColumn(camera.matrixWorld,0), s*.05);
+      fireProj({weapon:'flak', origin:o, dir:convergedDir(o,20), speed:26, color:0xffc266,
+        glowScale:.3, life:1.6, prox:1.3, aoe:2.2, boomEnd:true});
+    }
+    kick(W.flak.model,.1,-.1); flashMuzzle(0xffc266); SFX.flak(); vibrate(22); shake(2,.06);
+  },
+  homing(){ // три самонаводящиеся ракеты веером
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
+    for(let i=-1;i<=1;i++){
+      const d=convergedDir(o,20,2).add(_v1.set(i*.25,.12,0)).normalize();
+      fireProj({weapon:'homing', origin:o, dir:d, speed:17, color:0xff8866,
+        glowScale:.3, life:2.6, homing:5});
+    }
+    kick(W.homing.model,.12,-.12); flashMuzzle(0xff8866); SFX.missile(); vibrate([15,30,15]);
+  },
+  disc(){ // рикошет: до 3 перескоков между рыбами
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
+    fireProj({weapon:'disc', skin:'disc', origin:o, dir:convergedDir(o,20), speed:30,
+      color:0x7ef2e0, glowScale:.3, life:2.4, spin:20, ricochet:3});
+    kick(W.disc.model,.08); SFX.disc(); vibrate(14);
+  },
+  needler(){ // очередь розовых игл с лёгким самонаведением
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
+    const d=convergedDir(o,20,3).add(_v1.set(rand(-1,1),rand(-1,1),0).multiplyScalar(.03)).normalize();
+    fireProj({weapon:'needler', origin:o, dir:d, speed:30, color:0xff7bd5,
+      coreColor:0xffb0e8, glowScale:.2, life:1.8, homing:2});
+    kick(W.needler.model,.03); SFX.needle(); vibrate(8);
+  },
+  gauss(){ // мгновенный одиночный хитскан, очки x1.5
+    const dir=assistDir(aimDir(), 2*DEG, .6);
+    const camP=camera.getWorldPosition(_v1).clone();
+    ray.set(camP, dir);
+    let best=null, bd=1e9;
+    for(const f of fishes){
+      if(ray.ray.distanceSqToPoint(f.pos) < f.radius*f.radius*1.4){
+        const d2=f.pos.distanceToSquared(camP);
+        if(d2<bd){ bd=d2; best=f; }
+      }
+    }
+    const o=muzzleWorld().clone().addScaledVector(dir,.4);
+    beamLine(o, best?best.pos:camP.clone().addScaledVector(dir,60), 0xeaf6ff, .03, .14);
+    if(best){ hitFish(best,'gauss',1.5); state.hits++; }
+    else if(whale.active && ray.ray.distanceSqToPoint(whale.g.position)<5){ hitWhale('gauss'); state.hits++; }
+    kick(W.gauss.model,.14,-.04); camKick=1.2*DEG; flashMuzzle(0xeaf6ff);
+    SFX.gauss(); vibrate(20);
+  },
+  sing(){ // сингулярность: засасывает и схлопывается
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
+    fireProj({weapon:'sing', skin:'orb', origin:o, dir:convergedDir(o,16), speed:9,
+      color:0xb88cff, coreColor:0x080812, orbScale:.16, glowScale:.8, life:1.7,
+      suck:9, aoe:2.6, boomEnd:true});
+    kick(W.sing.model,.14); flashMuzzle(0xb88cff); SFX.sing(); vibrate([10,40,10,40]);
+  }
+};
+const RELEASE = {
+  rail(){
+    const w=W.rail;
+    w.reload=w.reloadMax;
+    state.shots++;
+    ray.set(camera.getWorldPosition(_v2).clone(), assistDir(aimDir(), 1.5*DEG, .5));
+    const dir=ray.ray.direction;
+    let any=false, killed=0;
+    for(const f of [...fishes]){
+      if(ray.ray.distanceSqToPoint(f.pos) < f.radius*f.radius*1.4){
+        _v2.copy(camera.position).sub(f.pos);
+        if(_v2.dot(dir)<0){ hitFish(f,'rail'); any=true; killed++; }
+      }
+    }
+    if(whale.active && ray.ray.distanceSqToPoint(whale.g.position)<5){
+      _v2.copy(camera.position).sub(whale.g.position);
+      if(_v2.dot(dir)<0){ hitWhale('rail',2); any=true; }
+    }
+    if(any) state.hits++;
+    if(killed>1){ toast('МУЛЬТИКИЛЛ ×'+killed); shake(6,.18); }
+    const o=muzzleWorld().clone().addScaledVector(dir,.4);
+    beamLine(o, camera.position.clone().addScaledVector(dir,80), 0xb0f8ff, .06, .18);
+    kick(w.model,.16); camKick=2.2*DEG;
+    flashMuzzle(0xb0f8ff); screenFlash('');
+    SFX.railFire(); vibrate([20,20,50]); shake(5,.15);
+  },
+  bfg(){ // зелёная смерть: плывёт и плавит всё в радиусе
+    const w=W.bfg;
+    w.reload=w.reloadMax;
+    state.shots++;
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
+    fireProj({weapon:'bfg', skin:'orb', origin:o, dir:convergedDir(o,20), speed:8,
+      color:0x6aff6a, coreColor:0xd0ffd0, orbScale:.2, glowScale:1.1, life:2.6,
+      melt:2.4, aoe:3.5, boomEnd:true});
+    kick(w.model,.2,-.06); camKick=1.6*DEG;
+    flashMuzzle(0x6aff6a); SFX.bfg(); vibrate([30,30,80]); shake(4,.12);
+  }
+};
+function tryFire(){
+  if(state.mode!=='play' || wcool>0) return;
+  const wd=W[curWeapon];
+  if(wd.mode==='auto' && wd.spinup && (wd.spin||0)<1) return; // вулкан ещё раскручивается
+  wcool=wd.cd||.2;
+  state.shots++;
+  FIRE[curWeapon]();
   $('cross').classList.add('fire'); setTimeout(()=>$('cross').classList.remove('fire'),60);
 }
-function railRelease(){
-  const w=W.rail;
-  if(!w.charging) return;
-  w.charging=false;
-  if(w.chargeSnd){ w.chargeSnd.stop(); w.chargeSnd=null; }
-  if(w.charge<.3){ w.charge=0; return; } // недозаряд — холостой
-  w.charge=0; w.reload=1.5;
-  state.shots++;
-  // хитскан сквозь всех на линии
-  ray.set(camera.getWorldPosition(_v2).clone(), assistDir(aimDir(), 1.5*DEG, .5));
-  const dir=ray.ray.direction;
-  let any=false, killed=0;
-  for(const f of [...fishes]){
-    if(!f.alive) continue;
-    if(ray.ray.distanceSqToPoint(f.pos) < f.radius*f.radius*1.4){
-      _v2.copy(camera.position).sub(f.pos);
-      if(_v2.dot(dir)<0){ hitFish(f,'rail'); any=true; killed++; }
-    }
-  }
-  if(whale.active && ray.ray.distanceSqToPoint(whale.g.position)<5){
-    _v2.copy(camera.position).sub(whale.g.position);
-    if(_v2.dot(dir)<0){ hitWhale('rail',2); any=true; }
-  }
-  if(any) state.hits++;
-  if(killed>1){ toast('МУЛЬТИКИЛЛ ×'+killed); shake(6,.18); }
-  // визуал луча
-  const o=muzzleWorld().clone().addScaledVector(dir,.4);
-  const end=_v1.copy(camera.position).addScaledVector(dir,80);
-  const mid=o.clone().add(end).multiplyScalar(.5), len=o.distanceTo(end);
-  beam.visible=true; beamLife=.18;
-  beam.scale.set(.06,len,.06); beam.position.copy(mid);
-  beam.lookAt(end); beam.rotateX(Math.PI/2);
-  beam.material.opacity=.9;
-  w.model.position.z=.16; camKick=2.2*DEG;
-  flashMuzzle(0xb0f8ff); screenFlash('');
-  SFX.railFire(); vibrate([20,20,50]); shake(5,.15);
+function startCharge(){
+  const wd=W[curWeapon];
+  if(wd.mode!=='charge' || wd.reload>0 || wd.charging) return;
+  wd.charging=true; wd.charge=0; wd.chargeSnd=SFX.railCharge();
+}
+function releaseCharge(){
+  const wd=W[curWeapon];
+  if(!wd.charging) return;
+  wd.charging=false;
+  if(wd.chargeSnd){ wd.chargeSnd.stop(); wd.chargeSnd=null; }
+  if(wd.charge<.3){ wd.charge=0; return; } // недозаряд — холостой
+  wd.charge=0;
+  RELEASE[curWeapon]();
   $('cross').classList.add('fire'); setTimeout(()=>$('cross').classList.remove('fire'),90);
 }
-function shootShotgun(){
-  if(wcool>0) return;
-  wcool=W.shotgun.cd;
-  const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
-  const base=camera.getWorldPosition(_v1).clone().addScaledVector(dir,12).sub(o).normalize();
-  for(let i=0;i<7;i++){
-    const d=base.clone().add(_v1.set(rand(-.5,.5),rand(-.5,.5),rand(-.5,.5)).multiplyScalar(.21)).normalize();
-    fireBolt(o, d, 30, 0xff9d4d, 'pellet');
-  }
-  state.shots++;
-  W.shotgun.model.position.z=.12; W.shotgun.model.rotation.x=-.18;
-  flashMuzzle(0xff9d4d);
-  SFX.shotgun(); vibrate(25); shake(3,.08);
-  $('cross').classList.add('fire'); setTimeout(()=>$('cross').classList.remove('fire'),70);
-}
-function flashMuzzle(color){ muzzleLight.color.set(color); muzzleLight.intensity=14; muzzleFrames=2; }
 
 function updateWeapons(dt, firingHeld){
   wcool=Math.max(0,wcool-dt);
-  // пружина отката
+  // пружины отдачи: корпус + объявленные части
   for(const k in W){
     const w=W[k]; if(!w.model) continue;
-    w.model.position.z*= (1-Math.min(1,dt*10));
-    w.model.rotation.x*= (1-Math.min(1,dt*10));
-    if(w.model.userData.barrels) for(const b of w.model.userData.barrels) b.position.z*=(1-Math.min(1,dt*9));
+    const damp=1-Math.min(1,dt*10);
+    w.model.position.z*=damp; w.model.rotation.x*=damp;
+    if(w.model.userData.recoil) for(const p of w.model.userData.recoil) p.position.z*=damp;
+    if(w.reload>0) w.reload-=dt;
   }
   camKick*=(1-Math.min(1,dt*6));
   if(muzzleFrames>0){ if(--muzzleFrames===0) muzzleLight.intensity=0; }
-  // турель: очередь при удержании
-  if(firingHeld && curWeapon==='turret' && state.mode==='play') shootTurret();
-  // рельсотрон: заряд
-  const r=W.rail;
-  if(r.reload>0) r.reload-=dt;
-  if(r.charging){
-    r.charge=Math.min(1, r.charge+dt/1.1);
-    const e=r.charge;
-    for(const cap of r.model.userData.caps) cap.material.emissive.setRGB(e*.1, e*.8, e);
-    if(Math.random()<e*.3) vibrate(8);
-  }else if(r.model){
-    for(const cap of r.model.userData.caps) cap.material.emissive.multiplyScalar(.9);
+  const cur=W[curWeapon];
+  // вулкан: раскрутка стволов
+  if(W.vulcan.model){
+    const v=W.vulcan;
+    v.spin=clamp(v.spin+((firingHeld&&curWeapon==='vulcan')?dt/v.spinup:-dt*1.6),0,1);
+    v.model.userData.spinGrp.rotation.z+=v.spin*dt*40;
+    if(v.spin>0&&v.spin<1&&curWeapon==='vulcan'&&firingHeld&&Math.random()<.3) vibrate(4);
   }
-  // лёгкое «дыхание» оружия, пульс ядра, вращение голо-прицела
+  // авто-огонь
+  if(firingHeld && cur.mode==='auto' && state.mode==='play') tryFire();
+  // заряд (рельса/БФГ)
+  if(cur.charging){
+    cur.charge=Math.min(1, cur.charge+dt/1.1);
+    if(Math.random()<cur.charge*.3) vibrate(8);
+  }
+  if(W.rail.model){
+    const caps=W.rail.model.userData.caps, e=W.rail.charging?W.rail.charge:0;
+    for(const cap of caps){
+      if(e>0) cap.material.emissive.setRGB(e*.1, e*.8, e);
+      else cap.material.emissive.multiplyScalar(.9);
+    }
+  }
+  if(W.bfg.model){
+    const ch=W.bfg.model.userData.chamber, e=W.bfg.charging?W.bfg.charge:0;
+    ch.scale.setScalar(.09*(1+e*.6+.08*Math.sin(now*6)));
+  }
+  // крио-луч
+  if(cur===W.freeze && cur.beaming && state.mode==='play'){
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.3);
+    cryoCone.visible=true;
+    cryoCone.position.copy(o).addScaledVector(dir,6.5);
+    cryoCone.scale.set(1.5,13,1.5);
+    cryoCone.lookAt(_v1.copy(o).addScaledVector(dir,14));
+    cryoCone.rotateX(-Math.PI/2);
+    cryoCone.material.opacity=.12+.05*Math.sin(now*22);
+    cur.tick-=dt;
+    if(cur.tick<=0){ cur.tick=.16; SFX.freezeTick(); }
+    const camP=camera.getWorldPosition(_v1);
+    for(const f of [...fishes]){
+      _v2.copy(f.pos).sub(camP);
+      const d=_v2.length();
+      if(d<13 && _v2.normalize().dot(dir)>.992){
+        f.cold=.5; f.freezeAcc=(f.freezeAcc||0)+dt;
+        if(f.freezeAcc>1){ hitFish(f,'freeze'); state.hits++; }
+      }
+    }
+  }else cryoCone.visible=false;
+  // косметика: дыхание, пульс ядра, голо-прицел, парящий топор
   weaponRoot.position.y=-.42+Math.sin(now*1.8)*.008;
-  const core=W[curWeapon].model&&W[curWeapon].model.userData.core;
-  if(core) core.scale.setScalar(.045*(1+.22*Math.sin(now*5)));
+  const core=cur.model&&cur.model.userData.core;
+  if(core) core.scale.setScalar(.04*(1+.22*Math.sin(now*5)));
+  if(cur.model&&cur.model.userData.idleSpin) cur.model.userData.idleSpin.rotation.y+=dt*2;
+  if(cur.model&&cur.model.userData.orb) cur.model.userData.orb.position.y=.02+Math.sin(now*3)*.012;
   if(weaponRoot.userData.holo) weaponRoot.userData.holo.rotation.z+=dt*1.4;
-  // чипы: бары перезарядки/заряда
-  const bars={turret:wcool/W.turret.cd, rail:r.charging?r.charge:(r.reload>0?r.reload/1.5:0), shotgun:wcool/W.shotgun.cd};
+  // бары чипов
   for(const c of chipEls){
-    const v=clamp(bars[c.dataset.w]||0,0,1);
-    c._bar.style.width=(v*100)+'%';
+    const k=c.dataset.w, wd=W[k]; let v=0;
+    if(k===curWeapon){
+      if(wd.charging) v=wd.charge;
+      else if(wd.reload>0) v=wd.reload/wd.reloadMax;
+      else if(wd.spinup) v=wd.spin;
+      else if(wd.cd) v=wcool/wd.cd;
+    }
+    c._bar.style.width=(clamp(v,0,1)*100)+'%';
   }
 }
 
-/* ---------------- попадания ---------------- */
-const HIT_COLORS={turret:0x19f0ff, rail:0xb0f8ff, shotgun:0xff9d4d};
-function hitFish(f, weapon){
+/* ---------------- попадания и снаряды ---------------- */
+const HIT_COLORS={freeze:0xbfeaff};
+for(const k in W) HIT_COLORS[k]=W[k].color;
+function hitFish(f, weapon, ptsScale=1){
   if(!f.alive) return;
   const sp=SPECIES[f.type], pos=f.pos.clone();
   killFishVisual(f);
@@ -1298,17 +1797,15 @@ function hitFish(f, weapon){
     state.kills.fugu=(state.kills.fugu||0)+1;
     return;
   }
-  // комбо
   state.combo=Math.min(10, state.combo+1);
   state.comboT=2.5;
   const mult=Math.max(1, state.combo);
-  const pts=sp.score*mult;
+  const pts=Math.round(sp.score*mult*ptsScale);
   state.score+=pts;
   state.kills[f.type]=(state.kills[f.type]||0)+1;
   SFX.hit(pos); SFX.combo(state.combo);
   if(state.combo===5||state.combo===10){ SFX.stinger(state.combo===10); burstFromCross(); }
   updateComboHud();
-  // визуал
   const col=HIT_COLORS[weapon]||0x19f0ff;
   if(f.type==='golden'){
     burst(pos, 0xffd166, 5, 36, 1.1, 2.5, .2);
@@ -1324,10 +1821,10 @@ function hitFish(f, weapon){
     vibrate(35);
     popNumber(pos,'+'+pts, mult>=3?'combo':'');
   }
-  if(weapon==='rail') voxelBlast(pos, 0xb0f8ff);
-  if(weapon==='shotgun') burst(pos, 0xffe0b0, 3, 18, .5, 6, .1); // «прожарка»
-  // чешуйки-блёстки
-  burst(pos, 0xffffff, 1.5, 14, 1.2, 1.5, .07);
+  if(weapon==='rail'||weapon==='gauss') voxelBlast(pos, 0xb0f8ff);
+  if(weapon==='freeze') voxelBlast(pos, 0xbfeaff); // ледяные осколки
+  if(weapon==='shotgun') burst(pos, 0xffe0b0, 3, 18, .5, 6, .1);
+  burst(pos, 0xffffff, 1.5, 14, 1.2, 1.5, .07); // чешуйки
   $('cross').classList.add('hit'); setTimeout(()=>$('cross').classList.remove('hit'),200);
   checkUnlocks();
 }
@@ -1335,39 +1832,96 @@ function burstFromCross(){
   const p=camera.getWorldPosition(_v1).clone().addScaledVector(aimDir(),3);
   burst(p, 0xb88cff, 3, 24, .6, 0, .14);
 }
+/* взрыв по площади: задевает рыб, кита и пугает остальных */
+function explodeAt(pos, radius, weapon){
+  burst(pos, HIT_COLORS[weapon]||0xffc266, 6, 36, .8, 3, .24);
+  burst(pos, 0xffffff, 3, 16, .5, 5, .1);
+  shockRing(pos, HIT_COLORS[weapon]||0xffc266);
+  SFX.boom(pos); shake(4,.12);
+  let killed=0;
+  for(const f of [...fishes]){
+    if(f.pos.distanceToSquared(pos)<radius*radius){ hitFish(f, weapon); killed++; }
+  }
+  if(whale.active && whale.g.position.distanceToSquared(pos)<(radius+1.5)*(radius+1.5)) hitWhale(weapon);
+  if(killed) state.hits++;
+  scareNear(pos, radius+3);
+  return killed;
+}
 function updateProjectiles(dt){
   for(const b of bolts){
     if(b.life<=0) continue;
     b.life-=dt;
+    // самонаведение
+    if(b.homing){
+      const t=nearestFish(b.m.position, 18);
+      if(t){
+        _v1.copy(t.pos).sub(b.m.position).normalize().multiplyScalar(b.speed0);
+        b.vel.lerp(_v1, Math.min(1, dt*b.homing));
+      }
+    }
+    // сингулярность: затягивает рыб
+    if(b.suck){
+      for(const f of fishes){
+        const d2=f.pos.distanceToSquared(b.m.position);
+        if(d2<20){ _v1.copy(b.m.position).sub(f.pos).normalize();
+          f.vel.addScaledVector(_v1, dt*b.suck); f.fear=.3; }
+      }
+    }
+    // БФГ: плавит всё рядом на пролёте
+    if(b.melt){
+      for(const f of [...fishes]){
+        if(f.pos.distanceToSquared(b.m.position)<b.melt*b.melt){ hitFish(f,'bfg'); state.hits++; }
+      }
+    }
+    if(b.grav) b.vel.y-=b.grav*dt;
     b.m.position.addScaledVector(b.vel, dt);
-    let hit=false;
-    for(const f of fishes){
+    if(b.spin&&b.spinMesh) b.spinMesh.rotation.x+=b.spin*dt;
+    else if(b.vel.lengthSq()>.01) b.m.lookAt(_v1.copy(b.m.position).add(b.vel));
+    // прокси-взрыватель
+    if(b.prox && nearestFish(b.m.position, b.prox, false)){
+      explodeAt(b.m.position, b.aoe, b.weapon);
+      b.life=0; b.m.visible=false; continue;
+    }
+    let dead=false;
+    for(const f of [...fishes]){
       if(!f.alive) continue;
-      const r=f.radius+(b.kind==='pellet'?.1:.18);
+      const r=f.radius+(b.skin==='orb'?.4:.18);
       const d2=b.m.position.distanceToSquared(f.pos);
       if(d2<r*r){
-        hitFish(f, b.kind==='pellet'?'shotgun':'turret');
-        state.hits++; hit=true; break;
+        if(b.aoe){ explodeAt(b.m.position, b.aoe, b.weapon); dead=true; break; }
+        hitFish(f, b.weapon); state.hits++;
+        if(b.pierce>0){ b.pierce--; continue; }
+        if(b.ricochet>0){
+          b.ricochet--;
+          const nt=nearestFish(b.m.position, 14);
+          if(nt){ b.vel.copy(nt.pos).sub(b.m.position).normalize().multiplyScalar(b.speed0);
+            SFX.disc(); break; }
+        }
+        dead=true; break;
       }
-      if(d2<2.5 && f.fear<=0){ // близкий промах — рыба пугается
+      if(d2<2.5 && f.fear<=0){ // близкий промах — испуг
         f.fear=.7;
-        f.target.copy(f.pos).addScaledVector(
-          _v2.copy(f.pos).sub(b.m.position).normalize(), 4);
+        f.target.copy(f.pos).addScaledVector(_v2.copy(f.pos).sub(b.m.position).normalize(), 4);
       }
     }
-    if(!hit && whale.active && b.m.position.distanceToSquared(whale.g.position)<4.8){
-      hitWhale(b.kind==='pellet'?'shotgun':'turret');
-      state.hits++; hit=true;
+    if(!dead && whale.active && b.m.position.distanceToSquared(whale.g.position)<4.8){
+      if(b.aoe) explodeAt(b.m.position, b.aoe, b.weapon);
+      else hitWhale(b.weapon==='shotgun'?'shotgun':b.weapon);
+      state.hits++; dead=true;
     }
-    if(hit){ b.life=0; b.m.visible=false; continue; }
-    if(b.kind==='pellet' && b.life<2.2-0.6) b.glow.material.opacity=Math.max(0,b.life/1.6); // дробь гаснет вдали
+    if(dead){ b.life=0; b.m.visible=false; continue; }
     if(b.life<=0){
       b.m.visible=false;
-      burst(b.m.position, 0x6fd8e8, .8, 10, .3, 2, .08); // искра промаха
-      scareNear(b.m.position, 2);
+      if(b.boomEnd) explodeAt(b.m.position, b.aoe||2, b.weapon);
+      else{ burst(b.m.position, 0x6fd8e8, .8, 10, .3, 2, .08); scareNear(b.m.position, 2); }
     }
   }
-  if(beamLife>0){ beamLife-=dt; beam.material.opacity=beamLife/.18*.9; if(beamLife<=0) beam.visible=false; }
+  for(const e of beams){
+    if(e.life<=0) continue;
+    e.life-=dt;
+    e.m.material.opacity=Math.max(0,e.life/e.max*.9);
+    if(e.life<=0) e.m.visible=false;
+  }
 }
 
 /* ---------------- слоумо «Golden Moment» ---------------- */
@@ -1380,12 +1934,16 @@ const state = {
   timeLeft:90, rush:false, bestCombo:0, spawnTick:0
 };
 const totalScore = ()=> save.total + (state.mode==='play'?state.score:0);
-let unlockedNow = {rail: save.total>=2000, shotgun: save.total>=5000, skins: save.total>=10000};
+const unlockedNow = {_skins: save.total>=10000};
+for(const k in W) unlockedNow[k] = save.total>=W[k].unlock;
 function checkUnlocks(){
   const t=totalScore();
-  if(!unlockedNow.rail && t>=2000){ unlockedNow.rail=true; toast('🔓 РЕЛЬСОТРОН РАЗБЛОКИРОВАН'); SFX.unlock(); refreshChips(); }
-  if(!unlockedNow.shotgun && t>=5000){ unlockedNow.shotgun=true; toast('🔓 ПЛАЗМЕННЫЙ ДРОБОВИК'); SFX.unlock(); refreshChips(); }
-  if(!unlockedNow.skins && t>=10000){ unlockedNow.skins=true; toast('🔓 СКИНЫ ОРУДИЯ'); SFX.unlock(); }
+  for(const k in W){
+    if(!unlockedNow[k] && t>=W[k].unlock){
+      unlockedNow[k]=true; toast('🔓 '+W[k].name+': РАЗБЛОКИРОВАНО'); SFX.unlock(); refreshChips();
+    }
+  }
+  if(!unlockedNow._skins && t>=10000){ unlockedNow._skins=true; toast('🔓 СКИНЫ ОРУДИЯ'); SFX.unlock(); }
 }
 function refreshChips(){
   document.querySelectorAll('.chip').forEach(c=>{
@@ -1414,7 +1972,8 @@ function startRound(){
 }
 function endRound(){
   state.mode='end';
-  if(W.rail.chargeSnd){ W.rail.chargeSnd.stop(); W.rail.chargeSnd=null; W.rail.charging=false; }
+  stopAllCharge();
+  for(const k in W) W[k].beaming=false;
   const acc = state.shots? Math.min(1, state.hits/state.shots) : 0;
   let bonus=0;
   if(acc>.6){ bonus=Math.round(state.score*.1); state.score+=bonus; }
@@ -1521,24 +2080,31 @@ function updateRadar(){
 /* ---------------- ввод ---------------- */
 let firingHeld=false, ptrId=null, ptrStart=null, dragging=false, lastPtr=null;
 const stage=$('stage');
+function pressFire(){
+  const wd=W[curWeapon];
+  if(wd.mode==='auto'){ firingHeld=true; tryFire(); }
+  else if(wd.mode==='tap') tryFire();
+  else if(wd.mode==='charge') startCharge();
+  else if(wd.mode==='beam'){ wd.beaming=true; state.shots++; }
+}
+function releaseFire(cancel){
+  const wd=W[curWeapon];
+  firingHeld=false;
+  if(wd.mode==='charge'){ if(cancel) stopAllCharge(); else releaseCharge(); }
+  if(wd.mode==='beam') wd.beaming=false;
+}
 stage.addEventListener('pointerdown', e=>{
   if(state.mode!=='play') return;
   if(ptrId!==null) return;
   ptrId=e.pointerId; ptrStart={x:e.clientX,y:e.clientY}; lastPtr={x:e.clientX,y:e.clientY}; dragging=false;
-  if(curWeapon==='turret'){ firingHeld=true; shootTurret(); }
-  else if(curWeapon==='rail'){
-    if(W.rail.reload<=0){ W.rail.charging=true; W.rail.charge=0; W.rail.chargeSnd=SFX.railCharge(); }
-  }
-  else if(curWeapon==='shotgun') shootShotgun();
+  pressFire();
 });
 stage.addEventListener('pointermove', e=>{
   if(e.pointerId!==ptrId) return;
   const dx=e.clientX-lastPtr.x, dy=e.clientY-lastPtr.y;
   lastPtr={x:e.clientX,y:e.clientY};
   if(!dragging && Math.hypot(e.clientX-ptrStart.x, e.clientY-ptrStart.y)>12){
-    dragging=true; firingHeld=false;
-    if(W.rail.charging){ W.rail.charging=false; W.rail.charge=0;
-      if(W.rail.chargeSnd){ W.rail.chargeSnd.stop(); W.rail.chargeSnd=null; } }
+    dragging=true; releaseFire(true); // драг отменяет огонь/заряд/луч
   }
   if(dragging){
     const k=.0042;
@@ -1548,23 +2114,24 @@ stage.addEventListener('pointermove', e=>{
 });
 function ptrUp(e){
   if(e.pointerId!==ptrId) return;
-  ptrId=null; firingHeld=false;
-  if(!dragging && curWeapon==='rail') railRelease();
-  else if(W.rail.charging){ W.rail.charging=false; W.rail.charge=0;
-    if(W.rail.chargeSnd){ W.rail.chargeSnd.stop(); W.rail.chargeSnd=null; } }
+  ptrId=null;
+  if(!dragging) releaseFire(false); else releaseFire(true);
   dragging=false;
 }
 stage.addEventListener('pointerup', ptrUp);
 stage.addEventListener('pointercancel', ptrUp);
 addEventListener('keydown', e=>{
   if(state.mode!=='play') return;
-  if(e.key==='1') setWeapon('turret');
-  if(e.key==='2') setWeapon('rail');
-  if(e.key==='3') setWeapon('shotgun');
-});
-document.querySelectorAll('.chip').forEach(c=>{
-  c.addEventListener('pointerdown', e=>e.stopPropagation());
-  c.addEventListener('click', e=>{ e.stopPropagation(); setWeapon(c.dataset.w); });
+  const keys=Object.keys(W);
+  const n='1234567890'.indexOf(e.key);
+  if(n>=0 && keys[n]) setWeapon(keys[n]);
+  if(e.key==='q'||e.key==='й'){ // следующее доступное
+    const i=keys.indexOf(curWeapon);
+    for(let s=1;s<=keys.length;s++){
+      const k=keys[(i+s)%keys.length];
+      if(totalScore()>=W[k].unlock){ setWeapon(k); break; }
+    }
+  }
 });
 $('muteBtn').addEventListener('pointerdown', e=>e.stopPropagation());
 $('muteBtn').addEventListener('click', e=>{
