@@ -200,7 +200,7 @@ import * as THREE from 'three';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '4.0.0';
+const VERSION = '4.1.0';
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
 const rand = (a,b)=>a+Math.random()*(b-a);
@@ -402,7 +402,8 @@ function playSample(kind,pos){
   const s=AU.ctx.createBufferSource();
   s.buffer=arr[(Math.random()*arr.length)|0];
   s.playbackRate.value=rand(.94,1.06); // лёгкий round-robin питч
-  s.connect(spatialDest(pos)); s.start();
+  const g=AU.ctx.createGain(); g.gain.value=.55;
+  s.connect(g); g.connect(spatialDest(pos)); s.start();
   return true;
 }
 /* мягкий перегруз для панча */
@@ -548,34 +549,44 @@ const SFX = {
   fanfare(pos){ const dest=spatialDest(pos);
     [523,659,784].forEach((f,i)=>tone({t:at()+i*.06,type:'square',f0:f,dur:.25,g:.1,dest})); },
   laser(){ // классический бластер «как в кино про далёкую галактику»
+    if(playSample('laser')) return;
     tone({type:'square',f0:1700*rand(.97,1.03),f1:280,dur:.12,g:.14});
     tone({type:'sine',f0:420,f1:90,dur:.1,g:.1}); },
-  vulcan(){ tone({type:'square',f0:520*rand(.93,1.07),f1:160,dur:.05,g:.11});
+  vulcan(){ if(playSample('vulcan')) return;
+    tone({type:'square',f0:520*rand(.93,1.07),f1:160,dur:.05,g:.11});
     noiseHit({ft:'highpass',f0:3200,dur:.025,g:.07}); },
   axe(){ noiseHit({ft:'bandpass',f0:600,f1:1500,dur:.28,g:.18,q:2});
     tone({type:'sine',f0:90,f1:60,dur:.1,g:.12}); },
-  plasma(){ tone({type:'sine',f0:140,f1:60,dur:.3,g:.3});
+  plasma(){ if(playSample('plasma')) return;
+    tone({type:'sine',f0:140,f1:60,dur:.3,g:.3});
     fmBell({f:300,dur:.3,g:.08,ratio:1.5,idx:4}); },
-  arcZap(){ const d=distNode(4);
+  arcZap(){ if(playSample('arc')) return;
+    const d=distNode(4);
     noiseHit({ft:'highpass',f0:2000,f1:6000,dur:.12,g:.22,dest:d});
     tone({type:'sawtooth',f0:900,f1:90,dur:.14,g:.12}); },
   freezeTick(){ fmBell({f:2400*rand(.9,1.2),dur:.18,g:.04,ratio:2.7,idx:2}); },
   missile(){ noiseHit({ft:'lowpass',f0:3000,f1:600,dur:.3,g:.2});
     tone({type:'sawtooth',f0:220,f1:90,dur:.25,g:.08}); },
-  flak(){ tone({type:'sine',f0:110,f1:40,dur:.2,g:.32});
+  flak(){ if(playSample('flak')) return;
+    tone({type:'sine',f0:110,f1:40,dur:.2,g:.32});
     noiseHit({ft:'bandpass',f0:700,f1:150,dur:.15,g:.2}); },
   disc(){ fmBell({f:880,dur:.15,g:.08,ratio:3.3,idx:3});
     noiseHit({ft:'highpass',f0:4000,dur:.05,g:.06}); },
-  needle(){ tone({type:'triangle',f0:2100*rand(.95,1.05),f1:900,dur:.07,g:.09}); },
-  gauss(){ const d=distNode(3);
+  needle(){ if(playSample('needler')) return;
+    tone({type:'triangle',f0:2100*rand(.95,1.05),f1:900,dur:.07,g:.09}); },
+  gauss(){ if(playSample('gauss')) return;
+    const d=distNode(3);
     noiseHit({ft:'lowpass',f0:7000,f1:300,dur:.18,g:.28,dest:d});
     fmBell({f:340,dur:.25,g:.1,ratio:2.76,idx:4}); },
-  bfg(){ tone({type:'sawtooth',f0:70,f1:50,dur:.8,g:.28});
+  bfg(){ if(playSample('bfg')) return;
+    tone({type:'sawtooth',f0:70,f1:50,dur:.8,g:.28});
     fmBell({f:160,dur:.7,g:.12,ratio:1.93,idx:5});
     noiseHit({ft:'lowpass',f0:5000,f1:120,dur:.6,g:.28}); },
-  sing(){ tone({type:'sine',f0:200,f1:30,dur:1,g:.22});
+  sing(){ if(playSample('sing')) return;
+    tone({type:'sine',f0:200,f1:30,dur:1,g:.22});
     tone({type:'sine',f0:207,f1:33,dur:1,g:.18}); },
-  boom(pos){ const dest=spatialDest(pos);
+  boom(pos){ if(playSample('boom',pos)) return;
+    const dest=spatialDest(pos);
     tone({type:'sine',f0:130,f1:35,dur:.4,g:.38,dest});
     noiseHit({ft:'lowpass',f0:3500,f1:120,dur:.35,g:.28,dest}); },
   gull(){ if(!AU.started) return; const t0=at();
