@@ -202,7 +202,7 @@ import * as THREE from 'three';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '2.0.0';
+const VERSION = '3.0.0';
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
 const rand = (a,b)=>a+Math.random()*(b-a);
@@ -276,6 +276,57 @@ const plankton = (()=>{
   const p=new THREE.Points(g,m); p.visible=false; scene.add(p); return p;
 })();
 
+/* ---------------- среда: лучи, пузырьки, фолбэк-мир ---------------- */
+const envFallback=new THREE.Group(); envFallback.visible=false; scene.add(envFallback);
+// «божественные лучи» — еле заметные столбы света, видны всегда
+const raysG=new THREE.Group();
+{
+  const rayMat=new THREE.MeshBasicMaterial({color:0x9fdfff,transparent:true,opacity:.045,
+    blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+  for(let i=0;i<4;i++){
+    const a=i*1.7+.5;
+    const r=new THREE.Mesh(new THREE.PlaneGeometry(2.4,26), rayMat);
+    r.position.set(Math.cos(a)*8, 7, Math.sin(a)*8);
+    r.rotation.set(.12, a, .15);
+    raysG.add(r);
+  }
+  scene.add(raysG);
+}
+// пузырьки-планктон в воздухе — всегда, объём миру даже поверх камеры
+const bubbles=(()=>{
+  const N=140, pos=new Float32Array(N*3);
+  for(let i=0;i<N;i++){ pos[i*3]=rand(-14,14); pos[i*3+1]=rand(-4,9); pos[i*3+2]=rand(-14,14); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  const m=new THREE.PointsMaterial({size:.05,map:TEX_SOFT,color:0xbfeaff,transparent:true,opacity:.45,
+    blending:THREE.AdditiveBlending,depthWrite:false});
+  const p=new THREE.Points(g,m); p.frustumCulled=false; scene.add(p);
+  return {pos, att:g.attributes.position, N};
+})();
+// фолбэк-мир: волнующееся море, айсберги, луна
+let seaU=null;
+{
+  const seaMat=new THREE.MeshLambertMaterial({color:0x0c2a40});
+  seaMat.onBeforeCompile=sh=>{
+    sh.uniforms.uT={value:0}; seaU=sh.uniforms.uT;
+    sh.vertexShader=sh.vertexShader
+      .replace('#include <common>','#include <common>\nuniform float uT;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed.z += sin(transformed.x*.35+uT)*.4 + cos(transformed.y*.3+uT*.7)*.35;');
+  };
+  const sea=new THREE.Mesh(new THREE.PlaneGeometry(180,180,40,40), seaMat);
+  sea.rotation.x=-Math.PI/2; sea.position.y=-7; envFallback.add(sea);
+  const iceMat=new THREE.MeshLambertMaterial({color:0xd6ecf5});
+  for(let i=0;i<7;i++){
+    const ice=new THREE.Mesh(new THREE.DodecahedronGeometry(rand(2,5),0), iceMat);
+    const a=rand(0,TAU), d=rand(26,55);
+    ice.position.set(Math.cos(a)*d, rand(-6.5,-4.5), Math.sin(a)*d);
+    ice.rotation.set(rand(0,3),rand(0,3),rand(0,3));
+    envFallback.add(ice);
+  }
+  const moon=new THREE.Sprite(new THREE.SpriteMaterial({map:TEX_SOFT,color:0xeaf6ff,
+    transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));
+  moon.scale.setScalar(14); moon.position.set(28,30,-60); envFallback.add(moon);
+}
+
 /* ---------------- управление обзором ---------------- */
 const gyro = {has:false, alpha:0, beta:0, gamma:0};
 addEventListener('deviceorientation', e=>{
@@ -326,7 +377,54 @@ function audioInit(){
     AU.reverb.connect(wet); wet.connect(AU.master);
   }catch(e){ AU.reverb=null; }
   AU.started = true;
+  loadSamplePack(); // необязательные стоковые сэмплы из sfx/
   ambientStart();
+}
+/* Опциональный сэмпл-пак: положи лицензированные звуки в sfx/ и опиши их в
+   sfx/manifest.json вида {"turret":["t1.mp3","t2.mp3"],"rail":[...],
+   "shotgun":[...],"hit":[...],"trophy":[...]}. Если пака нет — играет синтез. */
+async function loadSamplePack(){
+  try{
+    const man=await (await fetch('sfx/manifest.json')).json();
+    const out={};
+    for(const k in man){
+      out[k]=[];
+      for(const u of man[k]){
+        const ab=await (await fetch('sfx/'+u)).arrayBuffer();
+        out[k].push(await AU.ctx.decodeAudioData(ab));
+      }
+    }
+    AU.samples=out;
+  }catch(e){ /* пака нет — остаёмся на процедурном синтезе */ }
+}
+function playSample(kind,pos){
+  const arr=AU.samples&&AU.samples[kind];
+  if(!arr||!arr.length) return false;
+  const s=AU.ctx.createBufferSource();
+  s.buffer=arr[(Math.random()*arr.length)|0];
+  s.playbackRate.value=rand(.94,1.06); // лёгкий round-robin питч
+  s.connect(spatialDest(pos)); s.start();
+  return true;
+}
+/* мягкий перегруз для панча */
+function distNode(drive){
+  const ws=AU.ctx.createWaveShaper(), n=256, c=new Float32Array(n);
+  for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=Math.tanh(x*drive); }
+  ws.curve=c; ws.connect(AU.master); return ws;
+}
+/* негармоничный FM-звон — «металл» рельсотрона */
+function fmBell(o){
+  if(!AU.started) return;
+  const t0=o.t??at(), car=AU.ctx.createOscillator(), mod=AU.ctx.createOscillator(),
+        mg=AU.ctx.createGain(), g=AU.ctx.createGain();
+  car.frequency.value=o.f; mod.frequency.value=o.f*(o.ratio||2.76);
+  mg.gain.setValueAtTime(o.f*(o.idx||3), t0);
+  mg.gain.exponentialRampToValueAtTime(1, t0+o.dur);
+  mod.connect(mg); mg.connect(car.frequency);
+  g.gain.setValueAtTime(o.g||.15, t0);
+  g.gain.exponentialRampToValueAtTime(.0001, t0+o.dur);
+  car.connect(g); g.connect(o.dest||AU.master);
+  car.start(t0); mod.start(t0); car.stop(t0+o.dur+.05); mod.stop(t0+o.dur+.05);
 }
 const at = ()=>AU.ctx?AU.ctx.currentTime:0;
 /* пространственный выход: панорама по направлению на источник,
@@ -373,9 +471,19 @@ function noiseHit(o){ // шумовой слой через фильтр
   s.connect(f); f.connect(g); g.connect(o.dest||AU.master);
   s.start(t0); s.stop(t0+o.dur+.05);
 }
+/* 10 вариантов выстрелов: турель ×4, рельсотрон ×3, дробовик ×3 —
+   round-robin + джиттер питча, чтобы очередь не звучала «пулемётом из одного wav» */
+let pewN=0, railN=0, sgN=0, hitN=0;
 const SFX = {
-  pew(){ tone({type:'square',f0:800,f1:110,dur:.09,g:.18});
-         noiseHit({ft:'highpass',f0:2500,dur:.03,g:.1}); },
+  pew(){
+    if(playSample('turret')) return;
+    const v=pewN++%4, f0=[820,740,900,780][v]*rand(.96,1.05);
+    tone({type:'square',f0,f1:110,dur:.08+v*.012,g:.16});
+    if(v!==1) tone({type:'triangle',f0:f0*.5,f1:90,dur:.07,g:.08}); // тёплый низ
+    if(v===3) tone({type:'sine',f0:70,f1:45,dur:.12,g:.2});         // суб-удар
+    if(v===2) fmBell({f:1900*rand(.95,1.05),dur:.08,g:.05,ratio:3.1,idx:2}); // зап-искра
+    noiseHit({ft:'highpass',f0:2500+v*400,dur:.03,g:.1});
+  },
   railCharge(){ // возвращает узлы, чтобы остановить при отпускании
     if(!AU.started) return null;
     const o=AU.ctx.createOscillator(), g=AU.ctx.createGain();
@@ -385,15 +493,47 @@ const SFX = {
     o.connect(g); g.connect(AU.master); o.start();
     return {stop(){ try{g.gain.exponentialRampToValueAtTime(.0001,at()+.05); o.stop(at()+.1);}catch(e){} }};
   },
-  railFire(){ noiseHit({ft:'lowpass',f0:9000,f1:180,dur:.5,g:.5});
-              tone({type:'sine',f0:50,f1:34,dur:.4,g:.5});
-              noiseHit({ft:'highpass',f0:3000,f1:6000,dur:.7,g:.06,a:.2}); /* пар */ },
-  shotgun(){ for(let i=0;i<3;i++) noiseHit({t:at()+i*.013,ft:'bandpass',f0:900-i*180,f1:120,dur:.22,g:.3,q:1.2});
-             tone({type:'sine',f0:120,f1:45,dur:.25,g:.4}); },
-  hit(pos){ const dest=spatialDest(pos);
-    tone({type:'sine',f0:240,f1:50,dur:.16,g:.3,dest}); noiseHit({ft:'lowpass',f0:1800,f1:300,dur:.12,g:.18,dest}); },
-  trophy(pos){ const dest=spatialDest(pos);
-    [660,830,990].forEach((f,i)=>tone({t:at()+i*.09,type:'triangle',f0:f,dur:.3,g:.22,dest})); },
+  railFire(){
+    if(playSample('rail')) return;
+    const v=railN++%3;
+    const d=distNode(2.5+v); // перегруженный «крак» разряда
+    noiseHit({ft:'lowpass',f0:9000,f1:180,dur:.5,g:.45,dest:d});
+    tone({type:'sine',f0:50,f1:34,dur:.42,g:.5});
+    fmBell({f:[185,240,150][v],dur:.55,g:.16,ratio:2.76,idx:5}); // звон рельс
+    fmBell({t:at()+.04,f:[185,240,150][v]*1.5,dur:.3,g:.07,ratio:3.4,idx:3});
+    noiseHit({ft:'highpass',f0:3000,f1:6000,dur:.7,g:.06,a:.2}); /* пар */
+  },
+  shotgun(){
+    if(playSample('shotgun')) return;
+    const v=sgN++%3, base=[900,760,1050][v];
+    const d=distNode(2);
+    for(let i=0;i<3;i++)
+      noiseHit({t:at()+i*.013,ft:'bandpass',f0:base-i*180,f1:120,dur:.2+v*.03,g:.28,q:1.2,dest:d});
+    tone({type:'sine',f0:120*rand(.95,1.05),f1:42,dur:.27,g:.42});
+    if(v!==1) fmBell({f:600,dur:.1,g:.05,ratio:5.1,idx:2}); // лязг раструба
+    // механический клац перезарядки
+    noiseHit({t:at()+.32,ft:'bandpass',f0:1800,dur:.04,g:.1,q:4});
+    tone({t:at()+.36,type:'square',f0:300,f1:240,dur:.04,g:.05});
+  },
+  hit(pos){
+    if(playSample('hit',pos)) return;
+    const dest=spatialDest(pos), v=hitN++%3;
+    tone({type:'sine',f0:[240,210,270][v],f1:50,dur:.16,g:.3,dest});
+    noiseHit({ft:'lowpass',f0:1800,f1:300,dur:.12,g:.18,dest});
+    if(v===2) fmBell({f:1200,dur:.12,g:.05,ratio:2.4,idx:3,dest}); // брызги-искры
+  },
+  trophy(pos){
+    if(playSample('trophy',pos)) return;
+    const dest=spatialDest(pos);
+    [660,830,990].forEach((f,i)=>tone({t:at()+i*.09,type:'triangle',f0:f,dur:.3,g:.22,dest}));
+    fmBell({f:1320,dur:.6,g:.08,ratio:2.01,idx:2,dest}); // золотой звон
+  },
+  horn(pos){ // левиафан: низкий гудок с обертоном
+    const dest=spatialDest(pos);
+    tone({type:'sawtooth',f0:46,f1:60,dur:1.2,g:.28,a:.3,dest});
+    tone({type:'sawtooth',f0:69,f1:90,dur:1.1,g:.14,a:.3,dest});
+    tone({type:'sine',f0:34,f1:30,dur:1.4,g:.3,a:.2,dest});
+  },
   fugu(pos){ const dest=spatialDest(pos);
     tone({type:'sawtooth',f0:160,f1:60,dur:.6,g:.3,dest}); tone({type:'sawtooth',f0:171,f1:55,dur:.6,g:.3,dest});
     tone({type:'sine',f0:48,f1:30,dur:.9,g:.4,dest}); noiseHit({ft:'lowpass',f0:4000,f1:100,dur:.5,g:.4,dest}); },
@@ -448,10 +588,11 @@ function vibrate(p){ if(navigator.vibrate) try{ navigator.vibrate(p); }catch(e){
    сборки из примитивов. Виляние хвостом считает вершинный шейдер
    (инстанс-атрибут aPhase), CPU только пишет матрицы. */
 const GEO = {
-  sphere: new THREE.SphereGeometry(1, 12, 9),
-  cone:   new THREE.ConeGeometry(1, 1, 7),
-  cyl:    new THREE.CylinderGeometry(1, 1, 1, 8),
-  box:    new THREE.BoxGeometry(1, 1, 1)
+  sphere:   new THREE.SphereGeometry(1, 12, 9),
+  sphereHi: new THREE.SphereGeometry(1, 28, 20), // тела рыб: хватает на крап по вершинам
+  cone:     new THREE.ConeGeometry(1, 1, 7),
+  cyl:      new THREE.CylinderGeometry(1, 1, 1, 8),
+  box:      new THREE.BoxGeometry(1, 1, 1)
 };
 const SPECIES = {
   cod:    {score:100, radius:.55, speed:1.1, max:16, len:1,   amp:.09, name:'треска'},
@@ -465,17 +606,34 @@ const _v1=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3();
 /* запекание набора примитивов в одну геометрию с цветом по вершинам */
 const _bm=new THREE.Matrix4(), _be=new THREE.Euler(), _bq=new THREE.Quaternion(),
       _bp=new THREE.Vector3(), _bs=new THREE.Vector3(), _bc=new THREE.Color();
+const _ct=new THREE.Color(), _cb=new THREE.Color(), _cs=new THREE.Color(), _cv=new THREE.Color();
 function bakeParts(parts, post){
   const chunks=[];
   for(const pt of parts){
     const g=pt.geo.toNonIndexed();
+    const unit=pt.grad ? g.attributes.position.array.slice() : null; // позиции ДО трансформа
     if(pt.quat) _bq.copy(pt.quat); else _bq.setFromEuler(_be.set(...(pt.rot||[0,0,0])));
     _bm.compose(_bp.fromArray(pt.pos||[0,0,0]), _bq, _bs.fromArray(pt.scl||[1,1,1]));
     g.applyMatrix4(_bm);
     if(post) g.applyMatrix4(post);
-    _bc.set(pt.color);
     const n=g.attributes.position.count, col=new Float32Array(n*3);
-    for(let i=0;i<n;i++){ col[i*3]=_bc.r; col[i*3+1]=_bc.g; col[i*3+2]=_bc.b; }
+    if(pt.grad){
+      /* процедурная «шкура»: градиент спина→брюхо, крап, боковая линия */
+      _ct.set(pt.grad.top); _cb.set(pt.grad.bot); _cs.set(pt.grad.speck||0x000000);
+      for(let i=0;i<n;i++){
+        const ux=unit[i*3], uy=unit[i*3+1], uz=unit[i*3+2];
+        _cv.copy(_ct).lerp(_cb, clamp(.5-uy*.62,0,1));
+        if(pt.grad.speck && uy>-.15){
+          const h=Math.sin(ux*127.1+uy*311.7+uz*74.7)*43758.5453, fr=h-Math.floor(h);
+          if(fr>1-(pt.grad.density||.16)) _cv.lerp(_cs,.65);
+        }
+        if(Math.abs(uy-.06)<.05) _cv.multiplyScalar(.82); // боковая линия
+        col[i*3]=_cv.r; col[i*3+1]=_cv.g; col[i*3+2]=_cv.b;
+      }
+    }else{
+      _bc.set(pt.color);
+      for(let i=0;i<n;i++){ col[i*3]=_bc.r; col[i*3+1]=_bc.g; col[i*3+2]=_bc.b; }
+    }
     g.setAttribute('color', new THREE.BufferAttribute(col,3));
     chunks.push(g);
   }
@@ -492,23 +650,26 @@ function bakeParts(parts, post){
   out.setAttribute('color',    new THREE.BufferAttribute(col,3));
   return out;
 }
-function codParts(c){ // c — палитра вида {body, fin, belly}
+function codParts(c){ // c — палитра вида {grad:{top,bot,speck,density}, fin, belly}
   const P=[
-    {geo:GEO.sphere, scl:[.24,.3,.62], color:c.body},
+    {geo:GEO.sphereHi, scl:[.24,.3,.62], grad:c.grad},
     {geo:GEO.sphere, scl:[.2,.23,.52], pos:[0,-.08,0], color:c.belly},
-    {geo:GEO.cone, scl:[.05,.34,.26], rot:[Math.PI/2,0,0], pos:[0,0,-.72], color:c.fin}, // хвост
-    {geo:GEO.cyl, scl:[.012,.09,.012], pos:[0,-.3,.5], color:c.fin}                      // усик
+    {geo:GEO.cone, scl:[.06,.3,.3], rot:[Math.PI/2,0,.5],  pos:[0,.06,-.74], color:c.fin}, // хвост — вилка
+    {geo:GEO.cone, scl:[.06,.3,.3], rot:[Math.PI/2,0,-.5], pos:[0,-.06,-.74], color:c.fin},
+    {geo:GEO.cyl, scl:[.012,.09,.012], pos:[0,-.3,.5], color:c.fin},                       // усик
+    {geo:GEO.sphere, scl:[.1,.16,.05], pos:[0,.02,.34], color:c.fin}                       // жаберная крышка
   ];
   for(let i=0;i<3;i++) // три спинных плавника
     P.push({geo:GEO.cone, scl:[.04,.2,.14], rot:[-.25,0,0], pos:[0,.3,.3-i*.3], color:c.fin});
   for(const s of [-1,1]){
     P.push({geo:GEO.cone, scl:[.03,.16,.1], rot:[0,0,s*1.2], pos:[s*.22,-.06,.25], color:c.fin}); // грудные
-    P.push({geo:GEO.sphere, scl:[.045,.045,.045], pos:[s*.15,.08,.5], color:0x0a0a12});           // глаза
+    P.push({geo:GEO.sphere, scl:[.05,.05,.05], pos:[s*.15,.08,.49], color:0xdfeef2});             // белок глаза
+    P.push({geo:GEO.sphere, scl:[.028,.028,.028], pos:[s*.165,.08,.52], color:0x06080c});         // зрачок
   }
   return P;
 }
 function fuguParts(){
-  const P=[{geo:GEO.sphere, scl:[.42,.42,.42], color:0xc9a85a}];
+  const P=[{geo:GEO.sphereHi, scl:[.42,.42,.42], grad:{top:0xb5944a, bot:0xf0e6c8, speck:0x6e5526, density:.25}}];
   for(let i=0;i<12;i++){ // шипы по сфере «золотой спиралью» — детерминированно
     const y=1-(i+.5)/6, r=Math.sqrt(Math.max(0,1-y*y)), th=i*2.39996;
     const d=new THREE.Vector3(Math.cos(th)*r, y, Math.sin(th)*r);
@@ -521,10 +682,12 @@ function fuguParts(){
 /* материал вида: Lambert + инжект виляния в вершинный шейдер.
    Код шейдера одинаков у всех видов (один программный объект),
    амплитуда/длина — юниформы конкретного материала. */
-function fishMaterial(sp, emissive){
+function fishMaterial(sp, emissive, rim){
   const m=new THREE.MeshLambertMaterial({vertexColors:true, emissive:emissive||0x000000});
   m.onBeforeCompile=sh=>{
     sh.uniforms.uAmp={value:sp.amp}; sh.uniforms.uLen={value:sp.len};
+    sh.uniforms.uRim={value:(rim&&rim.k)??.5};
+    sh.uniforms.uRimCol={value:new THREE.Color((rim&&rim.col)??0x5fc8d8)};
     sh.vertexShader=sh.vertexShader
       .replace('#include <common>','#include <common>\nattribute float aPhase;\nuniform float uAmp;\nuniform float uLen;')
       .replace('#include <begin_vertex>',[
@@ -532,13 +695,21 @@ function fishMaterial(sp, emissive){
         'float wagK = 1.0 - smoothstep(-0.55*uLen, 0.15*uLen, position.z);',
         'transformed.x += sin(aPhase + position.z*2.5/max(uLen,0.01)) * uAmp * wagK;'
       ].join('\n'));
+    // fresnel-блик «мокрой чешуи»
+    sh.fragmentShader=sh.fragmentShader
+      .replace('#include <common>','#include <common>\nuniform float uRim;\nuniform vec3 uRimCol;')
+      .replace('#include <opaque_fragment>',[
+        'float rimK = pow(1.0 - saturate(dot(normalize(vViewPosition), normalize(normal))), 3.0);',
+        'outgoingLight += uRimCol * rimK * uRim;',
+        '#include <opaque_fragment>'
+      ].join('\n'));
   };
   return m;
 }
 const PALETTE={
-  cod:   {body:0x6b7d4f, fin:0x55663f, belly:0xe8eadc},
-  saithe:{body:0x2c3e4a, fin:0x1f2d36, belly:0x44545e},
-  golden:{body:0xd4a017, fin:0xb8860b, belly:0xffe9b0}
+  cod:   {grad:{top:0x4f6234, bot:0xb9c49a, speck:0x33401f, density:.2}, fin:0x55663f, belly:0xe8eadc},
+  saithe:{grad:{top:0x1d2b34, bot:0x7a8c96, speck:0x101a20, density:.1}, fin:0x1f2d36, belly:0x44545e},
+  golden:{grad:{top:0xe0a818, bot:0xffeec0, speck:0xfff6d8, density:.22}, fin:0xb8860b, belly:0xffe9b0}
 };
 const fishSys={}, _zeroM=new THREE.Matrix4().makeScale(0,0,0), _post=new THREE.Matrix4();
 (function initFishSystem(){
@@ -546,16 +717,17 @@ const fishSys={}, _zeroM=new THREE.Matrix4().makeScale(0,0,0), _post=new THREE.M
     cod:    bakeParts(codParts(PALETTE.cod)),
     saithe: bakeParts(codParts(PALETTE.saithe), _post.makeScale(.85,.8,1.1)),
     golden: bakeParts(codParts(PALETTE.golden), _post.makeScale(1.8,1.8,1.8)),
-    fry:    bakeParts([{geo:GEO.sphere, scl:[.06,.08,.17], color:0x9fc4d0},
+    fry:    bakeParts([{geo:GEO.sphere, scl:[.06,.08,.17], grad:{top:0x7da8b8, bot:0xe6f2f6}},
                        {geo:GEO.cone, scl:[.02,.1,.07], rot:[Math.PI/2,0,0], pos:[0,0,-.2], color:0x8ab4c2}]),
     fugu:   bakeParts(fuguParts())
   };
+  const RIMS={golden:{k:1.1,col:0xffd166}, fry:{k:.8,col:0x9fe8ff}, fugu:{k:.35,col:0xffaa66}};
   for(const type in geos){
     const sp=SPECIES[type], g=geos[type];
     const phase=new THREE.InstancedBufferAttribute(new Float32Array(sp.max),1);
     phase.setUsage(THREE.DynamicDrawUsage);
     g.setAttribute('aPhase', phase);
-    const mat=fishMaterial(sp, type==='golden'?0x664400:0);
+    const mat=fishMaterial(sp, type==='golden'?0x664400:0, RIMS[type]);
     const im=new THREE.InstancedMesh(g, mat, sp.max);
     im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     im.frustumCulled=false;
@@ -677,6 +849,74 @@ function scareNear(point, r){
     const d=f.pos.distanceTo(point);
     if(d<r){ f.fear=.7; f.target.copy(f.pos).addScaledVector(_v1.copy(f.pos).sub(point).normalize(), 4); }
   }
+}
+
+/* ---------------- ЛЕВИАФАН: редкое событие-босс ----------------
+   Огромный кит изредка пересекает небо по дуге. 6 HP: каждое попадание
+   даёт очки и наращивает комбо, добивание — джекпот со слоумо. */
+const whale=(()=>{
+  const g=new THREE.Group();
+  const mat=new THREE.MeshLambertMaterial({color:0x3a5570, emissive:0x000000});
+  const bellyMat=new THREE.MeshLambertMaterial({color:0xc2d2dc});
+  const body=new THREE.Mesh(GEO.sphereHi, mat); body.scale.set(1.05,.95,3.1); g.add(body);
+  const belly=new THREE.Mesh(GEO.sphere, bellyMat); belly.scale.set(.9,.72,2.7); belly.position.y=-.3; g.add(belly);
+  const tail=new THREE.Group(); tail.position.set(0,.1,-3.1);
+  for(const s of [-1,1]){
+    const fl=new THREE.Mesh(GEO.cone, mat);
+    fl.scale.set(.7,.9,.12); fl.rotation.z=s*1.35; fl.position.x=s*.5; tail.add(fl);
+  }
+  g.add(tail);
+  for(const s of [-1,1]){
+    const fin=new THREE.Mesh(GEO.cone, mat);
+    fin.scale.set(.18,.8,.3); fin.rotation.z=s*1.9; fin.position.set(s*.95,-.35,.9); g.add(fin);
+    const eye=new THREE.Mesh(GEO.sphere, new THREE.MeshBasicMaterial({color:0x0a0c10}));
+    eye.scale.setScalar(.1); eye.position.set(s*.8,.1,2.3); g.add(eye);
+  }
+  g.visible=false; scene.add(g);
+  return {g, tail, mat, active:false, hp:0, t:0, a0:0, dir:1, ynow:7, dist:15, dur:14, flash:0, timer:22};
+})();
+function whalePos(t, out){
+  const a=whale.a0+whale.dir*(t/whale.dur)*Math.PI*1.1;
+  return out.set(Math.cos(a)*whale.dist, whale.ynow+Math.sin(t*.7)*.5, Math.sin(a)*whale.dist);
+}
+function spawnWhale(){
+  whale.active=true; whale.hp=6; whale.t=0;
+  whale.a0=rand(0,TAU); whale.dir=Math.random()<.5?1:-1; whale.ynow=rand(5,8.5);
+  whalePos(0,_v1); whale.g.position.copy(_v1); whale.g.visible=true;
+  SFX.horn(_v1); toast('🐋 ЛЕВИАФАН! Залп по нему!', 1800); vibrate([20,60,20]);
+}
+function updateWhale(dt){
+  if(!whale.active) return;
+  whale.t+=dt;
+  if(whale.t>whale.dur){ whale.active=false; whale.g.visible=false; return; }
+  whalePos(whale.t,_v1); whalePos(whale.t+.12,_v2);
+  whale.g.position.copy(_v1); whale.g.lookAt(_v2);
+  whale.tail.rotation.x=Math.sin(whale.t*2.2)*.28;
+  if(whale.flash>0){ whale.flash-=dt; whale.mat.emissive.setScalar(Math.max(0,whale.flash)*.9); }
+}
+function hitWhale(weapon, dmg=1){
+  if(!whale.active) return;
+  whale.hp-=dmg; whale.flash=.25;
+  const pos=whale.g.position.clone();
+  state.combo=Math.min(10,state.combo+1); state.comboT=2.5;
+  const mult=Math.max(1,state.combo);
+  if(whale.hp<=0){
+    whale.active=false; whale.g.visible=false;
+    const pts=1500*mult; state.score+=pts;
+    state.kills.whale=(state.kills.whale||0)+1;
+    burst(pos,0x9fdfff,6,36,1.2,2,.25); burst(pos,0xffffff,8,30,1,4,.15);
+    shockRing(pos,0x9fdfff); screenFlash('gold');
+    SFX.horn(pos); SFX.trophy(pos); vibrate([40,40,80,40,120]);
+    popNumber(pos,'+'+pts,'gold');
+    toast('🐋 ЛЕВИАФАН ПОВЕРЖЕН!');
+    slowmo();
+  }else{
+    const pts=150*mult; state.score+=pts;
+    burst(pos,HIT_COLORS[weapon]||0x19f0ff,4,24,.6,4);
+    SFX.hit(pos); vibrate(30);
+    popNumber(pos,'+'+pts, mult>=3?'combo':'');
+  }
+  updateComboHud(); checkUnlocks();
 }
 
 /* ---------------- эффекты ---------------- */
@@ -846,6 +1086,21 @@ function buildWeapons(){
     const muzzle=new THREE.Mesh(GEO.cyl, wm.glow); muzzle.scale.set(.03,.08,.03);
     muzzle.rotation.x=Math.PI/2; muzzle.position.set(Math.cos(a)*.06,Math.sin(a)*.06,-.27); sg.add(muzzle);
   }
+  // деталировка: энерго-ядро, радиатор-гребёнка, голографический прицел
+  for(const wpn of [turret,rail,sg]){
+    const core=new THREE.Mesh(GEO.sphere, wm.glow);
+    core.scale.setScalar(.045); core.position.set(0,.07,.02);
+    wpn.add(core); wpn.userData.core=core;
+    for(let i=0;i<4;i++){
+      const fin=new THREE.Mesh(GEO.box, wm.body);
+      fin.scale.set(.09,.015,.06); fin.position.set(0,-.07-i*.022,.05); wpn.add(fin);
+    }
+  }
+  const holo=new THREE.Mesh(new THREE.TorusGeometry(.055,.0045,6,24),
+    new THREE.MeshBasicMaterial({color:sk.glow,transparent:true,opacity:.45,
+      blending:THREE.AdditiveBlending,depthWrite:false}));
+  holo.position.set(0,.12,-.55);
+  weaponRoot.add(holo); weaponRoot.userData.holo=holo;
   weaponRoot.add(turret,rail,sg);
   W.turret.model=turret; W.rail.model=rail; W.shotgun.model=sg;
   setWeapon(curWeapon,true);
@@ -953,6 +1208,10 @@ function railRelease(){
       if(_v2.dot(dir)<0){ hitFish(f,'rail'); any=true; killed++; }
     }
   }
+  if(whale.active && ray.ray.distanceSqToPoint(whale.g.position)<5){
+    _v2.copy(camera.position).sub(whale.g.position);
+    if(_v2.dot(dir)<0){ hitWhale('rail',2); any=true; }
+  }
   if(any) state.hits++;
   if(killed>1){ toast('МУЛЬТИКИЛЛ ×'+killed); shake(6,.18); }
   // визуал луча
@@ -1009,8 +1268,11 @@ function updateWeapons(dt, firingHeld){
   }else if(r.model){
     for(const cap of r.model.userData.caps) cap.material.emissive.multiplyScalar(.9);
   }
-  // лёгкое «дыхание» оружия
+  // лёгкое «дыхание» оружия, пульс ядра, вращение голо-прицела
   weaponRoot.position.y=-.42+Math.sin(now*1.8)*.008;
+  const core=W[curWeapon].model&&W[curWeapon].model.userData.core;
+  if(core) core.scale.setScalar(.045*(1+.22*Math.sin(now*5)));
+  if(weaponRoot.userData.holo) weaponRoot.userData.holo.rotation.z+=dt*1.4;
   // чипы: бары перезарядки/заряда
   const bars={turret:wcool/W.turret.cd, rail:r.charging?r.charge:(r.reload>0?r.reload/1.5:0), shotgun:wcool/W.shotgun.cd};
   for(const c of chipEls){
@@ -1093,6 +1355,10 @@ function updateProjectiles(dt){
           _v2.copy(f.pos).sub(b.m.position).normalize(), 4);
       }
     }
+    if(!hit && whale.active && b.m.position.distanceToSquared(whale.g.position)<4.8){
+      hitWhale(b.kind==='pellet'?'shotgun':'turret');
+      state.hits++; hit=true;
+    }
     if(hit){ b.life=0; b.m.visible=false; continue; }
     if(b.kind==='pellet' && b.life<2.2-0.6) b.glow.material.opacity=Math.max(0,b.life/1.6); // дробь гаснет вдали
     if(b.life<=0){
@@ -1139,6 +1405,7 @@ function startRound(){
   state.mode='play'; state.score=0; state.combo=0; state.comboT=0;
   state.shots=0; state.hits=0; state.kills={}; state.timeLeft=90; state.rush=false; state.bestCombo=0;
   while(fishes.length) killFishVisual(fishes[0]);
+  whale.active=false; whale.g.visible=false; whale.timer=rand(20,32);
   $('startScreen').classList.add('off'); $('endScreen').classList.add('off');
   $('hud').classList.add('on');
   $('hudBest').textContent='РЕКОРД '+save.best;
@@ -1162,7 +1429,7 @@ function endRound(){
     ['Лучшее комбо','×'+Math.max(1,state.bestCombo)],
     ['Точность',Math.round(acc*100)+'%'+(bonus?' (+'+bonus+')':'')],
     ['🐟 Треска',k.cod||0],['🐟 Сайда',k.saithe||0],['🐠 Мальки',k.fry||0],
-    ['✨ Золотые',k.golden||0],['💣 Фугу',k.fugu||0],
+    ['✨ Золотые',k.golden||0],['🐋 Левиафан',k.whale||0],['💣 Фугу',k.fugu||0],
     ['Всего очков за всё время',save.total]
   ];
   $('endStats').innerHTML=rows.map(r=>'<span>'+r[0]+'</span><b>'+r[1]+'</b>').join('');
@@ -1194,6 +1461,8 @@ function updateGame(dt){
     }
     if(units<desiredFishCount(elapsed)) spawnUnit();
   }
+  // левиафан: редкий заход
+  if(!whale.active){ whale.timer-=dt; if(whale.timer<=0){ spawnWhale(); whale.timer=rand(40,60); } }
   // комбо-таймер (промах НЕ сбрасывает)
   if(state.comboT>0){ state.comboT-=dt; if(state.comboT<=0){ state.combo=0; updateComboHud(); } }
   // HUD
@@ -1227,6 +1496,12 @@ function updateRadar(){
       off=Math.abs(_v2.x)>.95||Math.abs(_v2.y)>.92;
     }
     if(off) cands.push({f, x:_v1.x, y:_v1.y, gold:f.type==='golden', d:_v1.length()});
+  }
+  if(whale.active){ // левиафан — высший приоритет стрелки
+    _v1.copy(whale.g.position).applyMatrix4(inv);
+    let off=_v1.z>0;
+    if(!off){ _v2.copy(whale.g.position).project(camera); off=Math.abs(_v2.x)>.95||Math.abs(_v2.y)>.92; }
+    if(off) cands.push({x:_v1.x, y:_v1.y, gold:true, d:0});
   }
   cands.sort((a,b)=>(b.gold-a.gold)||(a.d-b.d));
   for(let i=0;i<arrows.length;i++){
@@ -1315,7 +1590,7 @@ async function setupAR(){
     await v.play().catch(()=>{});
     camOK=true;
   }catch(e){ camOK=false; }
-  sky.visible=!camOK; plankton.visible=!camOK;
+  sky.visible=!camOK; plankton.visible=!camOK; envFallback.visible=!camOK;
   renderer.setClearColor(0x000000, camOK?0:1);
   if(!camOK) toast('камера недоступна — режим «северное небо»',2200);
   if(navigator.wakeLock) navigator.wakeLock.request('screen').catch(()=>{});
@@ -1423,6 +1698,15 @@ function loop(t){
   updateCamera();
   skyMat.uniforms.t.value=now;
   if(plankton.visible) plankton.rotation.y+=sdt*.01;
+  // среда: пузырьки всплывают, лучи дрейфуют, море волнуется
+  for(let i=0;i<bubbles.N;i++){
+    bubbles.pos[i*3+1]+=sdt*(.22+(i%5)*.04);
+    if(bubbles.pos[i*3+1]>9) bubbles.pos[i*3+1]=-4;
+  }
+  bubbles.att.needsUpdate=true;
+  raysG.rotation.y+=sdt*.01;
+  if(seaU && envFallback.visible) seaU.value=now;
+  updateWhale(sdt);
   updateFish(sdt);
   updateProjectiles(sdt);
   updateFX(sdt);
