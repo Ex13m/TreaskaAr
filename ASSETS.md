@@ -3,6 +3,15 @@
 Все аудио-ассеты в репозитории — **CC0 1.0 (public domain)**, указание
 авторства не требуется, но мы его указываем из уважения.
 
+## 3D-модели (`models/`) — Quaternius, CC0
+
+Источник: quaternius.com (зеркало: github.com/trebeljahr/quaternius-showcase).
+
+| Файлы | Пак |
+|---|---|
+| guns/AR_*, SMG_*, Pistol_*, Sniper_*, Crossbow_1, Grenade_* | Modular Sci-Fi Guns |
+| Whale.glb | Fish Pack (Левиафан) |
+
 ## Музыка (`music/`) — FreePD, CC0
 
 Источник: freepd.com (зеркало: github.com/SoundSafari/CC0-1.0-Music).

@@ -205,18 +205,27 @@
 </div>
 
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js" } }
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+} }
 </script>
 
 <script type="module">
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /* ============================================================
    ПОДСТРЕЛИ ТРЕСКУ — мобильный AR-тир. Один файл, ноль ассетов:
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '5.1.0';
+const VERSION = '6.0.0';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -233,16 +242,30 @@ const persist = ()=>{ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(save));
 const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true, powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; // киношная тонкривая
+renderer.toneMappingExposure = 1.12;
 $('stage').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, .05, 200);
 scene.add(camera);
-scene.add(new THREE.HemisphereLight(0xbfe8ff, 0x0a1a2e, 1.05));
-const sun = new THREE.DirectionalLight(0xfff4e0, 1.2); sun.position.set(3,8,2); scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xbfe8ff, 0x0a1a2e, 1.1));
+const sun = new THREE.DirectionalLight(0xfff4e0, 1.5); sun.position.set(3,8,2); scene.add(sun);
+// PBR-окружение: metalness/roughness получают честные отражения
+{
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), .04).texture;
+}
+// bloom — только в режиме без камеры (поверх AR-видео композер ломает прозрачность)
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5, .7, .82);
+composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
 
 addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
 });
 
 /* мягкая круглая текстура для частиц и глоу-спрайтов */
@@ -621,6 +644,18 @@ const SFX = {
   unlock(){ [440,554,659,880].forEach((f,i)=>tone({t:at()+i*.08,type:'triangle',f0:f,dur:.3,g:.15})); }
 };
 Object.assign(SFX,{
+  piranhaGo(){ // выпуск стаи: всплеск + злобный стрёкот
+    noiseHit({ft:'bandpass',f0:600,f1:1800,dur:.3,g:.25,q:1.5});
+    for(let i=0;i<4;i++) tone({t:at()+i*.05,type:'square',f0:900+i*120,f1:500,dur:.04,g:.07});
+    subThump(.2);
+  },
+  chomp(pos){ // сочное чавканье отрываемого куска
+    const dest=spatialDest(pos), t0=at();
+    noiseHit({t:t0,ft:'lowpass',f0:700,f1:150,dur:.07,g:.35,dest});
+    tone({t:t0,type:'sine',f0:160*rand(.9,1.1),f1:55,dur:.09,g:.3,dest});
+    noiseHit({t:t0+.05,ft:'bandpass',f0:1400,f1:300,dur:.06,g:.2,q:2,dest});
+    tone({t:t0+.06,type:'sine',f0:90,f1:45,dur:.07,g:.2,dest});
+  },
   plasmagun(){ if(playSample('plasma')){ subThump(.18); return; }
     tone({type:'square',f0:300,f1:90,dur:.14,g:.22}); fmBell({f:520,dur:.12,g:.06,ratio:1.5,idx:3}); subThump(.18); },
   rockets(){ if(playSample('boom')){ subThump(.22); return; } SFX.missile(); subThump(.22); },
@@ -821,7 +856,8 @@ function fuguParts(){
    Код шейдера одинаков у всех видов (один программный объект),
    амплитуда/длина — юниформы конкретного материала. */
 function fishMaterial(sp, emissive, rim){
-  const m=new THREE.MeshLambertMaterial({vertexColors:true, emissive:emissive||0x000000});
+  const m=new THREE.MeshStandardMaterial({vertexColors:true, emissive:emissive||0x000000,
+    metalness:.12, roughness:.5, envMapIntensity:.55}); // влажный PBR-отблеск
   m.onBeforeCompile=sh=>{
     sh.uniforms.uAmp={value:sp.amp}; sh.uniforms.uLen={value:sp.len};
     sh.uniforms.uRim={value:(rim&&rim.k)??.5};
@@ -1030,8 +1066,14 @@ function updateWhale(dt){
   if(whale.t>whale.dur){ whale.active=false; whale.g.visible=false; return; }
   whalePos(whale.t,_v1); whalePos(whale.t+.12,_v2);
   whale.g.position.copy(_v1); whale.g.lookAt(_v2);
-  whale.tail.rotation.x=Math.sin(whale.t*2.2)*.28;
-  if(whale.flash>0){ whale.flash-=dt; whale.mat.emissive.setScalar(Math.max(0,whale.flash)*.9); }
+  if(whale.tail) whale.tail.rotation.x=Math.sin(whale.t*2.2)*.28;
+  else whale.g.rotateX(Math.sin(whale.t*2.2)*.07); // GLB: волна всем телом
+  if(whale.flash>0){
+    whale.flash-=dt;
+    const e=Math.max(0,whale.flash)*.9;
+    if(whale.mats) for(const m of whale.mats){ if(m.emissive) m.emissive.setScalar(e); }
+    else whale.mat.emissive.setScalar(e);
+  }
 }
 function hitWhale(weapon, dmg=1){
   if(!whale.active) return;
@@ -1193,7 +1235,7 @@ const ACC={
   acid:  new THREE.MeshBasicMaterial({color:0x8aff3a}),
   white: new THREE.MeshBasicMaterial({color:0xf2f8ff}),
   gold:  new THREE.MeshBasicMaterial({color:0xffd166}),
-  dark:  new THREE.MeshPhongMaterial({color:0x222a33, shininess:120, specular:0xaaccee})
+  dark:  new THREE.MeshStandardMaterial({color:0x222a33, metalness:.9, roughness:.25})
 };
 const weaponRoot = new THREE.Group();
 weaponRoot.position.set(0,-.42,-.9); camera.add(weaponRoot);
@@ -1245,7 +1287,8 @@ const W = {
   anti:   {name:'АНТИМАТЕРИЯ',  ico:'', unlock:80000, mode:'charge', cd:0,    color:0xcc66ff, reload:0, reloadMax:2.2},
   orbital:{name:'ОРБИТА',       ico:'', unlock:86000, mode:'tap',    cd:2.5,  color:0xeaf6ff},
   crossbow:{name:'АРБАЛЕТ',     ico:'', unlock:93000, mode:'tap',    cd:6,    color:0xd0ffe8},
-  echo:   {name:'ЭХО-НОВА',     ico:'', unlock:100000,mode:'tap',    cd:4,    color:0x9fdfff}
+  echo:   {name:'ЭХО-НОВА',     ico:'', unlock:100000,mode:'tap',    cd:4,    color:0x9fdfff},
+  piranha:{name:'ПИРАНЬИ',      ico:'', unlock:0,     mode:'tap',    cd:1.6,  color:0xff5566}
 };
 let curWeapon='turret', wcool=0;
 
@@ -1429,6 +1472,17 @@ const BUILD = {
   }
 };
 Object.assign(BUILD,{
+  piranha(){ // аквариум-пушка: бак с водой и пасть с зубами
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const t=new THREE.Group();
+    t.add(part(GEO.sphere, new THREE.MeshStandardMaterial({color:0x2a6678, metalness:.1, roughness:.2,
+      transparent:true, opacity:.7}), .1,.12,.14, 0,.03,.05));
+    t.add(part(GEO.cyl, wm.body, .08,.16,.08, 0,0,-.14, Math.PI/2,0,0));
+    for(let i=0;i<6;i++){ const a=i*1.047;
+      t.add(part(GEO.cone, ACC.white, .015,.05,.015, Math.cos(a)*.06,Math.sin(a)*.06,-.23, Math.PI/2+(i%2?.3:-.3),0,0)); }
+    t.add(part(GEO.cone, ACC.red, .03,.08,.015, 0,.16,.05, 0,0,-.6)); // плавник
+    g.add(t); g.userData.recoil.push(t); return g;
+  },
   plasmagun(){ const g=new THREE.Group(); g.userData.recoil=[];
     const t=new THREE.Group();
     t.add(part(GEO.cyl, wm.body, .09,.34,.09, 0,0,-.16, Math.PI/2,0,0));
@@ -1558,19 +1612,88 @@ Object.assign(BUILD,{
     e.add(part(GEO.box, wm.body, .12,.1,.16, 0,-.06,.04));
     g.add(e); g.userData.recoil.push(e); return g; }
 });
+/* Настоящие 3D-модели оружия (Quaternius, CC0) из models/guns/.
+   Не загрузились (офлайн) — остаются процедурные. */
+const GLB_GUNS={
+  turret:'AR_1', laser:'AR_2', shotgun:'AR_3', bfg:'AR_5', anti:'AR_6',
+  plasmagun:'SMG_1', needler:'SMG_2', arc:'Pistol_1', plasma:'Pistol_2', acid:'Pistol_3',
+  rail:'Sniper_1', gauss:'Sniper_2', railx:'Sniper_3', crossbow:'Crossbow_1',
+  homing:'Grenade_1', rockets:'Grenade_2', flak:'Grenade_3'
+};
+function normGun(sceneObj){
+  // нормализация: длинная ось → Z, дуло (тонкий конец) → -Z, длина ~0.55 м
+  const holder=new THREE.Group(), root=new THREE.Group();
+  holder.add(root); root.add(sceneObj);
+  let box=new THREE.Box3().setFromObject(sceneObj);
+  const sz=box.getSize(new THREE.Vector3());
+  if(sz.x>=sz.y && sz.x>=sz.z) sceneObj.rotation.y=-Math.PI/2;
+  else if(sz.y>sz.z) sceneObj.rotation.x=Math.PI/2;
+  holder.updateMatrixWorld(true);
+  box=new THREE.Box3().setFromObject(holder);
+  const sz2=box.getSize(new THREE.Vector3());
+  root.scale.setScalar(.55/Math.max(sz2.z,.001));
+  holder.updateMatrixWorld(true);
+  box=new THREE.Box3().setFromObject(holder);
+  const c=box.getCenter(new THREE.Vector3());
+  root.position.sub(c);
+  holder.updateMatrixWorld(true);
+  // эвристика дула: тонкая половина ствола смотрит вперёд
+  let rNeg=0,nNeg=0,rPos=0,nPos=0;
+  const v=new THREE.Vector3();
+  holder.traverse(o=>{
+    if(!o.isMesh) return;
+    const pos=o.geometry.attributes.position;
+    const step=Math.max(1,(pos.count/400)|0);
+    for(let i=0;i<pos.count;i+=step){
+      v.fromBufferAttribute(pos,i).applyMatrix4(o.matrixWorld);
+      const r=Math.abs(v.x)+Math.abs(v.y);
+      if(v.z<0){ rNeg+=r; nNeg++; } else { rPos+=r; nPos++; }
+    }
+    // PBR-подкрутка
+    if(o.material){ o.material.metalness=Math.min(1,(o.material.metalness??0)+.25);
+      o.material.roughness=Math.max(.2,(o.material.roughness??.8)-.25);
+      o.material.envMapIntensity=1; }
+  });
+  if(nNeg&&nPos && rNeg/nNeg > rPos/nPos) root.rotation.y=Math.PI; // дуло было сзади
+  return holder;
+}
+function loadGunModels(){
+  const loader=new GLTFLoader();
+  let left=Object.keys(GLB_GUNS).length+1;
+  const done=()=>{ if(--left<=0) buildWeapons(); };
+  for(const k in GLB_GUNS){
+    loader.load('models/guns/'+GLB_GUNS[k]+'.glb',
+      g=>{ W[k].glb=normGun(g.scene); done(); }, undefined, done);
+  }
+  loader.load('models/Whale.glb', g=>{ // левиафан из настоящей модели
+    const w=normGun(g.scene); // та же нормализация осей
+    w.scale.multiplyScalar(11); // ~6 м длины
+    whale.g.clear(); whale.g.add(w);
+    whale.tail=null; whale.glb=true; whale.mats=[];
+    w.traverse(o=>{ if(o.isMesh&&o.material) whale.mats.push(o.material); });
+    done();
+  }, undefined, done);
+}
 function buildWeapons(){
   const sk = SKINS[save.skin]||SKINS.neon;
-  // глянцевый металл с бликом — оружие ловит свет, а не выглядит пластилином
-  wm.body = new THREE.MeshPhongMaterial({color:sk.body, shininess:90, specular:0x88bbdd,
-    emissive:sk.body, emissiveIntensity:.12});
+  // PBR-металл: отражает окружение, как «нормальный рендер»
+  wm.body = new THREE.MeshStandardMaterial({color:sk.body, metalness:.85, roughness:.3,
+    envMapIntensity:1, emissive:sk.body, emissiveIntensity:.08});
   wm.glow = new THREE.MeshBasicMaterial({color:sk.glow});
   while(weaponRoot.children.length) weaponRoot.remove(weaponRoot.children[0]);
   for(const k in W){
     const m=BUILD[k]();
-    // деталировка: энерго-ядро + радиатор-гребёнка
+    if(W[k].glb){ // настоящая модель: процедурный каркас прячем, GLB пружинит как откат
+      for(const ch of m.children) ch.visible=false;
+      const g=W[k].glb;
+      m.add(g);
+      m.userData.recoil=[g];
+    }else{
+      for(let i=0;i<3;i++) m.add(part(GEO.box, wm.body, .08,.013,.05, 0,-.08-i*.02,.06));
+    }
+    // энерго-ядро светится у всех
     const core=part(GEO.sphere, wm.glow, .04,.04,.04, 0,.08,.06);
     m.add(core); m.userData.core=core;
-    for(let i=0;i<3;i++) m.add(part(GEO.box, wm.body, .08,.013,.05, 0,-.08-i*.02,.06));
     m.visible=false; weaponRoot.add(m); W[k].model=m;
   }
   const holo=new THREE.Mesh(new THREE.TorusGeometry(.055,.0045,6,24),
@@ -1647,7 +1770,8 @@ const CHIP_ICONS={
   anti:'<circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
   orbital:'<path d="M12 2v8M8 7l4 3 4-3"/><circle cx="12" cy="16" r="4"/><path d="M5 21h14"/>',
   crossbow:'<path d="M12 21V8M4 8c3-4 13-4 16 0M12 8V4M9 21h6"/>',
-  echo:'<path d="M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M6 6a8.5 8.5 0 0 0 0 12M18 6a8.5 8.5 0 0 1 0 12"/>'
+  echo:'<path d="M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M6 6a8.5 8.5 0 0 0 0 12M18 6a8.5 8.5 0 0 1 0 12"/>',
+  piranha:'<path d="M3 12c3-4 8-6 13-4l5 4-5 4c-5 2-10 0-13-4z"/><path d="M8 10l1.5 2L8 14M11 10l1.5 2-1.5 2M14 10l1.5 2-1.5 2" stroke-width="1.2"/><circle cx="6.5" cy="11" r=".9" fill="currentColor" stroke="none"/>'
 };
 const chipsBox=$('chips');
 for(const k in W){
@@ -1686,6 +1810,12 @@ function makeProj(skin){
   }else if(skin==='disc'){
     e.spinMesh=part(GEO.cyl, new THREE.MeshBasicMaterial({color:0x7ef2e0}), .22,.02,.22, 0,0,0, Math.PI/2,0,0);
     g.add(e.spinMesh);
+  }else if(skin==='piranha'){
+    const fishM=new THREE.Group();
+    fishM.add(part(GEO.sphere, new THREE.MeshStandardMaterial({color:0x8a3040, metalness:.2, roughness:.5}), .07,.09,.14));
+    fishM.add(part(GEO.cone, ACC.red, .02,.08,.06, 0,0,-.16, Math.PI/2,0,0));
+    fishM.add(part(GEO.cone, ACC.white, .015,.035,.01, 0,-.05,.1, Math.PI,0,0));
+    g.add(fishM); e.spinMesh=fishM;
   }else if(skin==='orb'){
     e.core=part(GEO.sphere, new THREE.MeshBasicMaterial({color:0x6aff6a}), .12,.12,.12);
     g.add(e.core);
@@ -1696,6 +1826,7 @@ function makeProj(skin){
 for(let i=0;i<26;i++) makeProj('bolt');
 for(let i=0;i<4;i++) makeProj('axe');
 for(let i=0;i<8;i++) makeProj('disc');
+for(let i=0;i<10;i++) makeProj('piranha');
 for(let i=0;i<12;i++) makeProj('orb');
 
 function fireProj(o){
@@ -1791,7 +1922,7 @@ const FIRE = {
       const o=muzzleWorld().clone().addScaledVector(dir,.55)
         .addScaledVector(_v1.setFromMatrixColumn(camera.matrixWorld,0), s*.05);
       fireProj({weapon:'laser', origin:o, dir:convergedDir(o,30), speed:55, color:0xff3030,
-        coreColor:0xff6060, glowScale:.28, life:1.6});
+        coreColor:0xff6060, glowScale:.28, life:1.6, pierce:1});
     }
     kick(w.model,.05); flashMuzzle(0xff3030); SFX.laser(); vibrate(10);
   },
@@ -1906,6 +2037,16 @@ const FIRE = {
   }
 };
 Object.assign(FIRE,{
+  piranha(){ // стая из пяти: догоняют, вгрызаются, сдирают по кускам
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.4);
+    for(let i=0;i<5;i++){
+      const d=convergedDir(o,14,4).add(_v1.set(rand(-.3,.3),rand(-.2,.3),0)).normalize();
+      const b=fireProj({weapon:'piranha', skin:'piranha', origin:o, dir:d, speed:15+i,
+        color:0xff5566, glowScale:.16, life:6, homing:11});
+      if(b){ b.latch=null; b.chewT=rand(0,.1); }
+    }
+    kick(W.piranha.model,.12,-.1); SFX.piranhaGo(); vibrate([15,20,15]);
+  },
   plasmagun(){ // разрывная плазма очередью
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
     fireProj({weapon:'plasmagun', skin:'orb', origin:o, dir:convergedDir(o,22), speed:26,
@@ -2382,6 +2523,42 @@ function updateProjectiles(dt){
   for(const b of bolts){
     if(b.life<=0) continue;
     b.life-=dt;
+    if(b.skin==='piranha'){ // пираньи живут по своим правилам
+      if(b.spinMesh) b.spinMesh.rotation.y=Math.sin(now*26+b.life)*.5; // вилянье
+      if(b.latch && !b.latch.alive) b.latch=null;
+      if(!b.latch){
+        const t=nearestFish(b.m.position, 30);
+        if(t){
+          _v1.copy(t.pos).sub(b.m.position);
+          if(_v1.length()<t.radius+.25){ b.latch=t; b.chewT=.05; }
+          else b.vel.lerp(_v1.normalize().multiplyScalar(b.speed0), Math.min(1,dt*b.homing));
+        }
+        b.m.position.addScaledVector(b.vel, dt);
+        if(b.vel.lengthSq()>.01) b.m.lookAt(_v1.copy(b.m.position).add(b.vel));
+      }else{
+        const f=b.latch;
+        // висит на туше и грызёт
+        b.m.position.copy(f.pos).add(_v1.set(Math.sin(now*17+b.life*7), Math.cos(now*13), Math.sin(now*11)).multiplyScalar(.18*f.size));
+        b.m.lookAt(f.pos);
+        f.fear=.4;
+        b.chewT-=dt;
+        if(b.chewT<=0){
+          b.chewT=.22;
+          SFX.chomp(f.pos); vibrate(8);
+          burst(f.pos, 0xcc2233, 2.2, 12, .45, 3, .1); // клочья
+          burst(f.pos, 0xffffff, 1.2, 6, .3, 2, .06);  // чешуя
+          f.size*=.86; // кусок оторван — рыба реально меньше
+          f.biteHP=(f.biteHP??3)-1;
+          if(f.biteHP<=0){
+            voxelBlast(f.pos, 0xcc3344);
+            hitFish(f,'piranha'); state.hits++;
+            b.latch=null;
+          }
+        }
+      }
+      if(b.life<=0) b.m.visible=false;
+      continue;
+    }
     // самонаведение
     if(b.homing){
       const t=nearestFish(b.m.position, 18);
@@ -2818,7 +2995,10 @@ if(!navigator.onLine) $('offlineNote').style.display='block';
    масштаб рендера (до ×0.6), при запасе — возвращаем. Геймплей, эффекты
    и UI не трогаем — деградирует только разрешение канваса. */
 const quality={scale:1, t:0, frames:0, fps:60};
-function applyQuality(){ renderer.setPixelRatio(Math.min(devicePixelRatio,2)*quality.scale); }
+function applyQuality(){
+  const pr=Math.min(devicePixelRatio,2)*quality.scale;
+  renderer.setPixelRatio(pr); composer.setPixelRatio(pr);
+}
 function qualityTick(dt){
   quality.t+=dt; quality.frames++;
   if(quality.t<2) return;
@@ -2838,6 +3018,7 @@ let dbgT=0;
 
 /* ---------------- главный цикл ---------------- */
 buildWeapons();
+loadGunModels(); // GLB подменят процедурные модели, когда докачаются
 $('ver').textContent='v'+VERSION;
 let now=0, last=performance.now();
 function loop(t){
@@ -2874,7 +3055,8 @@ function loop(t){
     renderer.domElement.style.transform='translate('+rand(-shakeAmp,shakeAmp)+'px,'+rand(-shakeAmp,shakeAmp)+'px)';
     if(shakeT<=0) renderer.domElement.style.transform='';
   }
-  renderer.render(scene,camera);
+  if(!camOK && quality.scale>=.8) composer.render(); // неон + аврора + bloom
+  else renderer.render(scene,camera);
   if(dbgEl){ dbgT+=dt; if(dbgT>.25){ dbgT=0;
     dbgEl.textContent='fps   '+quality.fps.toFixed(0)
       +'\ncalls '+renderer.info.render.calls
