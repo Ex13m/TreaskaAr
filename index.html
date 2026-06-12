@@ -216,8 +216,8 @@ import * as THREE from 'three';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '5.0.0';
-const ARSENAL = new URLSearchParams(location.search).has('arsenal'); // демо-режим: весь арсенал
+const VERSION = '5.1.0';
+const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
 const rand = (a,b)=>a+Math.random()*(b-a);
@@ -2483,6 +2483,7 @@ const totalScore = ()=> save.total + (state.mode==='play'?state.score:0);
 const unlockedNow = {_skins: save.total>=10000};
 for(const k in W) unlockedNow[k] = save.total>=W[k].unlock;
 function checkUnlocks(){
+  if(ARSENAL) return; // всё уже открыто — тосты разблокировок не нужны
   const t=totalScore();
   for(const k in W){
     if(!unlockedNow[k] && t>=W[k].unlock){
@@ -2517,7 +2518,7 @@ function startRound(){
   $('hudBest').textContent='РЕКОРД '+save.best;
   refreshChips();
   // если пробный доступ кончился, а ствол ещё залочен — вернуться на турель
-  if(!(totalScore()>=W[curWeapon].unlock || curWeapon===save.trialW)) setWeapon('turret', true);
+  if(!(ARSENAL || totalScore()>=W[curWeapon].unlock || curWeapon===save.trialW)) setWeapon('turret', true);
   if(AU.ctx && AU.ctx.state==='suspended') AU.ctx.resume();
 }
 function endRound(){
@@ -2738,7 +2739,7 @@ function buildSkinRow(){
   const row=$('skinRow'); row.innerHTML='';
   for(const k of ['neon','chrome','rust']){
     const b=document.createElement('button');
-    b.className='skinbtn sk-'+k+(save.skin===k?' sel':'')+((k!=='neon'&&save.total<10000)?' lock':'');
+    b.className='skinbtn sk-'+k+(save.skin===k?' sel':'')+((!ARSENAL&&k!=='neon'&&save.total<10000)?' lock':'');
     b.title=k;
     b.addEventListener('click',()=>{ save.skin=k; persist(); buildWeapons(); buildSkinRow();
 function buildOptRow(){

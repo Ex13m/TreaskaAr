@@ -1,5 +1,5 @@
 /* Подстрели треску — service worker: офлайн-кэш ядра + рантайм-кэш */
-const CACHE = 'treska-v7';
+const CACHE = 'treska-v8';
 const CORE = [
   './',
   './index.html',

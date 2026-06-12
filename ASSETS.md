@@ -12,6 +12,18 @@
 | ice-and-snow.mp3 | «Ice and Snow» | FreePD (CC0) |
 | the-ice-giants.mp3 | «The Ice Giants» | FreePD (CC0) |
 
+## Звуки выстрелов (`sfx/`) — rubberduck via Free-SFX, CC0
+
+«Пороховые» выстрелы и взрывы: пак Bang от rubberduck (opengameart.org),
+зеркало: github.com/EternityForest/Free-SFX (public domain / CC0).
+Перекодированы из Opus в M4A с нормализацией loudnorm −14 LUFS.
+
+| Группа | Оригиналы |
+|---|---|
+| turret-, vulcan- → shot-01…03 | shot_01…03 |
+| shotgun- → bang-01…03, flak- → bang-05,06 | bang_01…08 |
+| rail- → cannon-01,02; bfg → cannon-03; boom → cannon-04,05 + bang-08 | cannon_01…05 |
+
 ## Звуки (`sfx/`) — Kenney, CC0
 
 Файлы перекодированы из Ogg Vorbis в M4A (AAC 96 кбит/с), потому что

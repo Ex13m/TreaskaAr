@@ -1,9 +1,8 @@
 {
   "turret": [
-    "turret-000.m4a",
-    "turret-001.m4a",
-    "turret-002.m4a",
-    "turret-003.m4a"
+    "shot-01.m4a",
+    "shot-02.m4a",
+    "shot-03.m4a"
   ],
   "laser": [
     "laser-0.m4a",
@@ -11,19 +10,18 @@
     "laser-2.m4a"
   ],
   "rail": [
-    "rail-000.m4a",
-    "rail-001.m4a",
-    "rail-002.m4a"
+    "cannon-01.m4a",
+    "cannon-02.m4a"
   ],
   "shotgun": [
-    "shotgun-000.m4a",
-    "shotgun-001.m4a",
-    "shotgun-002.m4a"
+    "bang-01.m4a",
+    "bang-02.m4a",
+    "bang-03.m4a"
   ],
   "vulcan": [
-    "vulcan-000.m4a",
-    "vulcan-001.m4a",
-    "vulcan-002.m4a"
+    "shot-01.m4a",
+    "shot-02.m4a",
+    "shot-03.m4a"
   ],
   "plasma": [
     "plasma-0.m4a",
@@ -35,8 +33,8 @@
     "arc-2.m4a"
   ],
   "flak": [
-    "flak-0.m4a",
-    "flak-1.m4a"
+    "bang-05.m4a",
+    "bang-06.m4a"
   ],
   "needler": [
     "needler-0.m4a",
@@ -46,7 +44,7 @@
     "gauss-0.m4a"
   ],
   "bfg": [
-    "bfg-0.m4a"
+    "cannon-03.m4a"
   ],
   "sing": [
     "sing-0.m4a",
@@ -63,7 +61,8 @@
     "trophy-1.m4a"
   ],
   "boom": [
-    "boom-0.m4a",
-    "boom-1.m4a"
+    "cannon-04.m4a",
+    "cannon-05.m4a",
+    "bang-08.m4a"
   ]
 }
