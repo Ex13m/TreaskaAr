@@ -216,7 +216,8 @@ import * as THREE from 'three';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '4.2.0';
+const VERSION = '5.0.0';
+const ARSENAL = new URLSearchParams(location.search).has('arsenal'); // демо-режим: весь арсенал
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
 const rand = (a,b)=>a+Math.random()*(b-a);
@@ -377,7 +378,7 @@ function audioInit(){
   const lim = AU.ctx.createDynamicsCompressor();
   lim.threshold.value=-12; lim.knee.value=4; lim.ratio.value=14; lim.attack.value=.002; lim.release.value=.12;
   AU.master = AU.ctx.createGain();
-  AU.master.gain.value = save.muted?0:0.85;
+  AU.master.gain.value = save.muted?0:1.0;
   AU.master.connect(lim); lim.connect(AU.ctx.destination);
   AU.noise = (()=>{ const b=AU.ctx.createBuffer(1,AU.ctx.sampleRate,AU.ctx.sampleRate);
     const d=b.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; return b; })();
@@ -420,9 +421,14 @@ function playSample(kind,pos){
   const s=AU.ctx.createBufferSource();
   s.buffer=arr[(Math.random()*arr.length)|0];
   s.playbackRate.value=rand(.94,1.06); // лёгкий round-robin питч
-  const g=AU.ctx.createGain(); g.gain.value=.55;
+  const g=AU.ctx.createGain(); g.gain.value=.95;
   s.connect(g); g.connect(spatialDest(pos)); s.start();
   return true;
+}
+/* суб-удар: низкочастотное «тело» выстрела, играет и ПОД сэмплами */
+function subThump(g){
+  tone({type:'sine',f0:78,f1:40,dur:.13,g:g||.25});
+  noiseHit({ft:'lowpass',f0:900,f1:200,dur:.05,g:.12});
 }
 /* мягкий перегруз для панча */
 function distNode(drive){
@@ -494,7 +500,7 @@ function noiseHit(o){ // шумовой слой через фильтр
 let pewN=0, railN=0, sgN=0, hitN=0;
 const SFX = {
   pew(){
-    if(playSample('turret')) return;
+    if(playSample('turret')){ subThump(.2); return; }
     const v=pewN++%4, f0=[820,740,900,780][v]*rand(.96,1.05);
     tone({type:'square',f0,f1:110,dur:.08+v*.012,g:.16});
     if(v!==1) tone({type:'triangle',f0:f0*.5,f1:90,dur:.07,g:.08}); // тёплый низ
@@ -512,7 +518,7 @@ const SFX = {
     return {stop(){ try{g.gain.exponentialRampToValueAtTime(.0001,at()+.05); o.stop(at()+.1);}catch(e){} }};
   },
   railFire(){
-    if(playSample('rail')) return;
+    if(playSample('rail')){ subThump(.2); return; }
     const v=railN++%3;
     const d=distNode(2.5+v); // перегруженный «крак» разряда
     noiseHit({ft:'lowpass',f0:9000,f1:180,dur:.5,g:.45,dest:d});
@@ -522,7 +528,7 @@ const SFX = {
     noiseHit({ft:'highpass',f0:3000,f1:6000,dur:.7,g:.06,a:.2}); /* пар */
   },
   shotgun(){
-    if(playSample('shotgun')) return;
+    if(playSample('shotgun')){ subThump(.2); return; }
     const v=sgN++%3, base=[900,760,1050][v];
     const d=distNode(2);
     for(let i=0;i<3;i++)
@@ -567,43 +573,43 @@ const SFX = {
   fanfare(pos){ const dest=spatialDest(pos);
     [523,659,784].forEach((f,i)=>tone({t:at()+i*.06,type:'square',f0:f,dur:.25,g:.1,dest})); },
   laser(){ // классический бластер «как в кино про далёкую галактику»
-    if(playSample('laser')) return;
+    if(playSample('laser')){ subThump(.2); return; }
     tone({type:'square',f0:1700*rand(.97,1.03),f1:280,dur:.12,g:.14});
     tone({type:'sine',f0:420,f1:90,dur:.1,g:.1}); },
-  vulcan(){ if(playSample('vulcan')) return;
+  vulcan(){ if(playSample('vulcan')){ subThump(.2); return; }
     tone({type:'square',f0:520*rand(.93,1.07),f1:160,dur:.05,g:.11});
     noiseHit({ft:'highpass',f0:3200,dur:.025,g:.07}); },
   axe(){ noiseHit({ft:'bandpass',f0:600,f1:1500,dur:.28,g:.18,q:2});
     tone({type:'sine',f0:90,f1:60,dur:.1,g:.12}); },
-  plasma(){ if(playSample('plasma')) return;
+  plasma(){ if(playSample('plasma')){ subThump(.2); return; }
     tone({type:'sine',f0:140,f1:60,dur:.3,g:.3});
     fmBell({f:300,dur:.3,g:.08,ratio:1.5,idx:4}); },
-  arcZap(){ if(playSample('arc')) return;
+  arcZap(){ if(playSample('arc')){ subThump(.2); return; }
     const d=distNode(4);
     noiseHit({ft:'highpass',f0:2000,f1:6000,dur:.12,g:.22,dest:d});
     tone({type:'sawtooth',f0:900,f1:90,dur:.14,g:.12}); },
   freezeTick(){ fmBell({f:2400*rand(.9,1.2),dur:.18,g:.04,ratio:2.7,idx:2}); },
   missile(){ noiseHit({ft:'lowpass',f0:3000,f1:600,dur:.3,g:.2});
     tone({type:'sawtooth',f0:220,f1:90,dur:.25,g:.08}); },
-  flak(){ if(playSample('flak')) return;
+  flak(){ if(playSample('flak')){ subThump(.2); return; }
     tone({type:'sine',f0:110,f1:40,dur:.2,g:.32});
     noiseHit({ft:'bandpass',f0:700,f1:150,dur:.15,g:.2}); },
   disc(){ fmBell({f:880,dur:.15,g:.08,ratio:3.3,idx:3});
     noiseHit({ft:'highpass',f0:4000,dur:.05,g:.06}); },
-  needle(){ if(playSample('needler')) return;
+  needle(){ if(playSample('needler')){ subThump(.2); return; }
     tone({type:'triangle',f0:2100*rand(.95,1.05),f1:900,dur:.07,g:.09}); },
-  gauss(){ if(playSample('gauss')) return;
+  gauss(){ if(playSample('gauss')){ subThump(.2); return; }
     const d=distNode(3);
     noiseHit({ft:'lowpass',f0:7000,f1:300,dur:.18,g:.28,dest:d});
     fmBell({f:340,dur:.25,g:.1,ratio:2.76,idx:4}); },
-  bfg(){ if(playSample('bfg')) return;
+  bfg(){ if(playSample('bfg')){ subThump(.2); return; }
     tone({type:'sawtooth',f0:70,f1:50,dur:.8,g:.28});
     fmBell({f:160,dur:.7,g:.12,ratio:1.93,idx:5});
     noiseHit({ft:'lowpass',f0:5000,f1:120,dur:.6,g:.28}); },
-  sing(){ if(playSample('sing')) return;
+  sing(){ if(playSample('sing')){ subThump(.2); return; }
     tone({type:'sine',f0:200,f1:30,dur:1,g:.22});
     tone({type:'sine',f0:207,f1:33,dur:1,g:.18}); },
-  boom(pos){ if(playSample('boom',pos)) return;
+  boom(pos){ if(playSample('boom',pos)){ subThump(.3); return; }
     const dest=spatialDest(pos);
     tone({type:'sine',f0:130,f1:35,dur:.4,g:.38,dest});
     noiseHit({ft:'lowpass',f0:3500,f1:120,dur:.35,g:.28,dest}); },
@@ -614,6 +620,33 @@ const SFX = {
     tone({t:t0+.15,type:'sine',f0:1600,f1:900,dur:.18,g:.02}); },
   unlock(){ [440,554,659,880].forEach((f,i)=>tone({t:at()+i*.08,type:'triangle',f0:f,dur:.3,g:.15})); }
 };
+Object.assign(SFX,{
+  plasmagun(){ if(playSample('plasma')){ subThump(.18); return; }
+    tone({type:'square',f0:300,f1:90,dur:.14,g:.22}); fmBell({f:520,dur:.12,g:.06,ratio:1.5,idx:3}); subThump(.18); },
+  rockets(){ if(playSample('boom')){ subThump(.22); return; } SFX.missile(); subThump(.22); },
+  shuriken(){ SFX.disc(); },
+  harpoon(){ if(playSample('gauss')){ subThump(.2); return; }
+    noiseHit({ft:'bandpass',f0:1200,f1:300,dur:.2,g:.25,q:2}); tone({type:'sine',f0:140,f1:60,dur:.18,g:.3}); },
+  mines(){ tone({type:'square',f0:600,f1:500,dur:.05,g:.12}); tone({t:at()+.07,type:'square',f0:800,dur:.04,g:.1}); },
+  boomerang(){ SFX.disc(); noiseHit({ft:'bandpass',f0:700,f1:1500,dur:.3,g:.15,q:3}); },
+  chain(){ SFX.arcZap(); tone({type:'sine',f0:60,f1:35,dur:.4,g:.4}); },
+  flameTick(){ noiseHit({ft:'lowpass',f0:1800,f1:600,dur:.14,g:.12}); },
+  frost(){ SFX.freezeTick(); tone({type:'sine',f0:120,f1:50,dur:.3,g:.3}); },
+  pinball(){ fmBell({f:660,dur:.12,g:.1,ratio:2.4,idx:4}); subThump(.15); },
+  gatlas(){ if(playSample('vulcan')){ return; } tone({type:'square',f0:1400*rand(.95,1.05),f1:400,dur:.05,g:.1}); },
+  swarm(){ SFX.missile(); noiseHit({t:at()+.08,ft:'lowpass',f0:2500,f1:500,dur:.25,g:.15}); },
+  tornado(){ tone({type:'sawtooth',f0:90,f1:240,dur:.6,g:.2}); noiseHit({ft:'bandpass',f0:400,f1:1200,dur:.6,g:.2,q:1}); },
+  heliosTick(){ tone({type:'sine',f0:880,f1:840,dur:.12,g:.05}); },
+  railx(){ SFX.railFire(); tone({t:at()+.06,type:'sine',f0:46,f1:32,dur:.4,g:.4}); },
+  acid(){ tone({type:'sawtooth',f0:200,f1:60,dur:.3,g:.2}); noiseHit({ft:'bandpass',f0:900,f1:200,dur:.3,g:.2,q:2}); },
+  anti(){ SFX.bfg(); tone({type:'sine',f0:38,f1:28,dur:1,g:.4}); },
+  orbital(){ tone({type:'sine',f0:1200,f1:200,dur:.8,g:.15}); },
+  crossbow(){ const t0=at();
+    for(let i=0;i<6;i++) tone({t:t0+i*.03,type:'square',f0:500+i*180,dur:.05,g:.1});
+    noiseHit({ft:'highpass',f0:2000,f1:6000,dur:.2,g:.2}); subThump(.25); },
+  echo(){ if(playSample('boom')){ subThump(.35); return; }
+    tone({type:'sine',f0:55,f1:30,dur:.8,g:.5}); noiseHit({ft:'lowpass',f0:4000,f1:80,dur:.7,g:.4}); }
+});
 function ambientStart(){ // ветер
   const s=AU.ctx.createBufferSource(); s.buffer=AU.noise; s.loop=true;
   const f=AU.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=320; f.Q.value=.5;
@@ -1027,7 +1060,7 @@ function hitWhale(weapon, dmg=1){
 
 /* ---------------- эффекты ---------------- */
 const bursts=[];
-for(let i=0;i<10;i++){
+for(let i=0;i<16;i++){
   const N=36, pos=new Float32Array(N*3), vel=new Float32Array(N*3);
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3));
   const m=new THREE.PointsMaterial({size:.16,map:TEX_SOFT,transparent:true,opacity:1,
@@ -1157,6 +1190,9 @@ const ACC={
   ice:   new THREE.MeshBasicMaterial({color:0xbfeaff}),
   orange:new THREE.MeshBasicMaterial({color:0xffaa44}),
   violet:new THREE.MeshBasicMaterial({color:0xb88cff}),
+  acid:  new THREE.MeshBasicMaterial({color:0x8aff3a}),
+  white: new THREE.MeshBasicMaterial({color:0xf2f8ff}),
+  gold:  new THREE.MeshBasicMaterial({color:0xffd166}),
   dark:  new THREE.MeshPhongMaterial({color:0x222a33, shininess:120, specular:0xaaccee})
 };
 const weaponRoot = new THREE.Group();
@@ -1182,11 +1218,34 @@ const W = {
   flak:   {name:'ФЛАК',       ico:'🎆', unlock:11000, mode:'tap',    cd:.6,   color:0xffc266},
   homing: {name:'РОЙ',        ico:'🚀', unlock:12000, mode:'tap',    cd:.9,   color:0xff8866},
   disc:   {name:'ДИСК',       ico:'💿', unlock:14000, mode:'tap',    cd:.7,   color:0x7ef2e0},
-  freeze: {name:'КРИО-ЛУЧ',   ico:'❄️', unlock:15000, mode:'beam',   cd:0,    color:0xbfeaff, beaming:false, tick:0},
+  freeze: {name:'КРИО-ЛУЧ',   ico:'❄️', unlock:15000, mode:'beam',   cd:0,    color:0xbfeaff, beaming:false, tick:0,
+           beamCfg:{color:0xbfeaff,range:13,width:1.5,cone:.992,rate:1,slow:true,snd:'freezeTick',killAs:'freeze'}},
   needler:{name:'ИГЛОМЁТ',    ico:'📌', unlock:16000, mode:'auto',   cd:.18,  color:0xff7bd5},
   gauss:  {name:'ГАУСС',      ico:'🎯', unlock:18000, mode:'tap',    cd:.5,   color:0xeaf6ff},
   bfg:    {name:'БФГ-МИНИ',   ico:'☢️', unlock:20000, mode:'charge', cd:0,    color:0x6aff6a, reload:0, reloadMax:1},
-  sing:   {name:'СИНГУЛЯРНОСТЬ',ico:'🕳️',unlock:25000,mode:'tap',    cd:1.4,  color:0xb88cff}
+  sing:   {name:'СИНГУЛЯРНОСТЬ',ico:'🕳️',unlock:25000,mode:'tap',    cd:1.4,  color:0xb88cff},
+  plasmagun:{name:'ПЛАЗМАГАН',  ico:'', unlock:27000, mode:'auto',   cd:.22,  color:0x66ff99},
+  rockets:{name:'РАЗРЫВ',       ico:'', unlock:29000, mode:'tap',    cd:1.0,  color:0xff6644},
+  shuriken:{name:'СЮРИКЕНЫ',    ico:'', unlock:31000, mode:'tap',    cd:.6,   color:0xb8f8ff},
+  harpoon:{name:'ГАРПУН',       ico:'', unlock:33000, mode:'tap',    cd:.7,   color:0xcfe6ff},
+  mines:  {name:'МИНЫ',         ico:'', unlock:35000, mode:'tap',    cd:.9,   color:0xcc88ff},
+  boomerang:{name:'СЕРП',       ico:'', unlock:38000, mode:'tap',    cd:.8,   color:0xffd166},
+  chain:  {name:'МОЛОТ ТОРА',   ico:'', unlock:41000, mode:'tap',    cd:.9,   color:0xaaccff},
+  flame:  {name:'ОГНЕМЁТ',      ico:'', unlock:44000, mode:'beam',   cd:0,    color:0xff7733, beaming:false, tick:0,
+           beamCfg:{color:0xff7733,range:7.5,width:2.2,cone:.97,rate:2.2,slow:false,snd:'flameTick',killAs:'flame'}},
+  frost:  {name:'КРИО-БОМБА',   ico:'', unlock:47000, mode:'tap',    cd:.9,   color:0x9fe8ff},
+  pinball:{name:'ПИНБОЛ',       ico:'', unlock:50000, mode:'tap',    cd:.65,  color:0xf2f8ff},
+  gatlas: {name:'ЛАЗ-ГАТЛИНГ',  ico:'', unlock:54000, mode:'auto',   cd:.07,  color:0xff5050, spinup:.35, spin:0},
+  swarm:  {name:'ОСИНЫЙ РОЙ',   ico:'', unlock:58000, mode:'tap',    cd:1.2,  color:0xffaa33},
+  tornado:{name:'ЦИКЛОН',       ico:'', unlock:62000, mode:'tap',    cd:1.3,  color:0x7ef2e0},
+  helios: {name:'ГЕЛИОС',       ico:'', unlock:66000, mode:'beam',   cd:0,    color:0xfff2c0, beaming:false, tick:0,
+           beamCfg:{color:0xfff2c0,range:16,width:.9,cone:.997,rate:1.7,slow:false,snd:'heliosTick',killAs:'helios'}},
+  railx:  {name:'ДУПЛЕТ',       ico:'', unlock:70000, mode:'charge', cd:0,    color:0xb0f8ff, reload:0, reloadMax:1.8},
+  acid:   {name:'КИСЛОТА',      ico:'', unlock:75000, mode:'tap',    cd:.8,   color:0x8aff3a},
+  anti:   {name:'АНТИМАТЕРИЯ',  ico:'', unlock:80000, mode:'charge', cd:0,    color:0xcc66ff, reload:0, reloadMax:2.2},
+  orbital:{name:'ОРБИТА',       ico:'', unlock:86000, mode:'tap',    cd:2.5,  color:0xeaf6ff},
+  crossbow:{name:'АРБАЛЕТ',     ico:'', unlock:93000, mode:'tap',    cd:6,    color:0xd0ffe8},
+  echo:   {name:'ЭХО-НОВА',     ico:'', unlock:100000,mode:'tap',    cd:4,    color:0x9fdfff}
 };
 let curWeapon='turret', wcool=0;
 
@@ -1369,6 +1428,136 @@ const BUILD = {
     return g;
   }
 };
+Object.assign(BUILD,{
+  plasmagun(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const t=new THREE.Group();
+    t.add(part(GEO.cyl, wm.body, .09,.34,.09, 0,0,-.16, Math.PI/2,0,0));
+    t.add(part(GEO.sphere, ACC.green, .07,.07,.07, 0,0,-.36));
+    for(let i=0;i<3;i++) t.add(part(new THREE.TorusGeometry(.07,.012,6,14), ACC.green, 1,1,1, 0,0,-.06-i*.1));
+    g.add(t); g.userData.recoil.push(t); return g; },
+  rockets(){ const g=new THREE.Group(); g.userData.recoil=[];
+    for(const sd of [-1,1]){ const tube=new THREE.Group(); tube.position.x=sd*.08;
+      tube.add(part(GEO.cyl, wm.body, .05,.36,.05, 0,0,-.16, Math.PI/2,0,0));
+      tube.add(part(GEO.cone, ACC.red, .045,.09,.045, 0,0,-.36, -Math.PI/2,0,0));
+      g.add(tube); g.userData.recoil.push(tube); }
+    g.add(part(GEO.box, wm.body, .2,.08,.18, 0,-.07,0)); return g; },
+  shuriken(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const h=new THREE.Group();
+    h.add(part(GEO.box, wm.body, .16,.05,.18, 0,-.04,0));
+    for(let i=0;i<3;i++){ const a=i*2.094;
+      h.add(part(GEO.cone, ACC.ice, .04,.12,.015, Math.cos(a)*.07,.05+Math.sin(a)*.07,-.1, 0,0,a+Math.PI/2)); }
+    g.add(h); g.userData.recoil.push(h); g.userData.idleSpin=h; return g; },
+  harpoon(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const r=new THREE.Group();
+    r.add(part(GEO.box, ACC.dark, .03,.05,.66, 0,0,-.2));
+    r.add(part(GEO.cone, ACC.white, .03,.12,.03, 0,0,-.56, -Math.PI/2,0,0));
+    r.add(part(GEO.cone, ACC.white, .02,.07,.02, 0,.04,-.5, -Math.PI/1.7,0,0));
+    r.add(part(GEO.box, wm.body, .09,.1,.2, 0,-.07,.05));
+    g.add(r); g.userData.recoil.push(r); return g; },
+  mines(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const d=new THREE.Group();
+    d.add(part(GEO.cyl, wm.body, .11,.18,.11, 0,0,-.08, Math.PI/2,0,0));
+    for(let i=0;i<4;i++) d.add(part(GEO.sphere, ACC.violet, .03,.03,.03, Math.cos(i*1.57)*.08, Math.sin(i*1.57)*.08, -.2));
+    g.add(d); g.userData.recoil.push(d); return g; },
+  boomerang(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const h=new THREE.Group();
+    h.add(part(GEO.box, ACC.gold, .04,.02,.22, -.07,.04,-.06, 0,.5,0));
+    h.add(part(GEO.box, ACC.gold, .04,.02,.22, .07,.04,-.06, 0,-.5,0));
+    h.add(part(GEO.box, wm.body, .12,.07,.16, 0,-.05,.02));
+    g.add(h); g.userData.recoil.push(h); g.userData.idleSpin=h; return g; },
+  chain(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const h=new THREE.Group();
+    h.add(part(GEO.box, wm.body, .14,.1,.2, 0,0,.02));
+    for(let i=0;i<3;i++){ const a=i*2.094+.5;
+      h.add(part(GEO.cone, wm.glow, .02,.24,.02, Math.cos(a)*.07,.02+Math.sin(a)*.07,-.2, Math.PI/2.2,0,0)); }
+    h.add(part(new THREE.TorusGeometry(.06,.014,6,16), ACC.ice, 1,1,1, 0,.02,-.1));
+    g.add(h); g.userData.recoil.push(h); return g; },
+  flame(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const n=new THREE.Group();
+    n.add(part(GEO.cyl, ACC.dark, .07,.3,.07, 0,0,-.14, Math.PI/2,0,0));
+    n.add(part(GEO.cone, ACC.orange, .09,.1,.09, 0,0,-.32, Math.PI/2,0,0));
+    n.add(part(GEO.sphere, ACC.orange, .025,.025,.025, 0,.06,-.3));
+    n.add(part(GEO.cyl, wm.body, .09,.16,.09, 0,-.1,.08, 0,0,.3));
+    g.add(n); g.userData.recoil.push(n); return g; },
+  frost(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const n=new THREE.Group();
+    n.add(part(GEO.cyl, wm.body, .1,.2,.1, 0,0,-.05, Math.PI/2,0,0));
+    n.add(part(GEO.sphere, ACC.ice, .09,.09,.09, 0,.05,.1));
+    for(let i=0;i<3;i++) n.add(part(GEO.cone, ACC.ice, .025,.1,.025, (i-1)*.05,.02,-.2, Math.PI/2,0,0));
+    g.add(n); g.userData.recoil.push(n); return g; },
+  pinball(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const h=new THREE.Group();
+    h.add(part(new THREE.TorusGeometry(.09,.02,8,20), wm.glow, 1,1,1, 0,.02,-.14));
+    h.add(part(GEO.sphere, ACC.white, .055,.055,.055, 0,.02,-.14));
+    h.add(part(GEO.box, wm.body, .12,.08,.18, 0,-.06,.02));
+    g.add(h); g.userData.recoil.push(h); return g; },
+  gatlas(){ const g=new THREE.Group(); g.userData.recoil=[];
+    g.add(part(GEO.box, wm.body, .15,.13,.2, 0,-.02,.08));
+    const spin=new THREE.Group(); spin.position.z=-.16;
+    for(let i=0;i<4;i++){ const a=i*1.5708;
+      spin.add(part(GEO.cyl, ACC.dark, .016,.36,.016, Math.cos(a)*.04,Math.sin(a)*.04,-.05, Math.PI/2,0,0)); }
+    spin.add(part(GEO.cyl, ACC.red, .055,.03,.055, 0,0,-.24, Math.PI/2,0,0));
+    g.add(spin); g.userData.spinGrp=spin; g.userData.recoil.push(spin); return g; },
+  swarm(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const box=new THREE.Group();
+    box.add(part(GEO.box, wm.body, .24,.18,.22));
+    for(let i=0;i<7;i++){ const a=i*.897;
+      box.add(part(GEO.cyl, ACC.orange, .02,.05,.02, Math.cos(a)*.07,Math.sin(a)*.06,-.12, Math.PI/2,0,0)); }
+    g.add(box); g.userData.recoil.push(box); return g; },
+  tornado(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const t=new THREE.Group();
+    t.add(part(new THREE.TorusGeometry(.1,.025,8,20), wm.body, 1,1,1, 0,.02,-.12));
+    for(let i=0;i<4;i++){ const a=i*1.5708;
+      t.add(part(GEO.box, ACC.ice, .07,.015,.03, Math.cos(a)*.08,.02+Math.sin(a)*.08,-.12, 0,0,a)); }
+    t.add(part(GEO.box, wm.body, .1,.08,.16, 0,-.07,.04));
+    g.add(t); g.userData.recoil.push(t); g.userData.idleSpin=t; return g; },
+  helios(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const h=new THREE.Group();
+    for(let i=0;i<3;i++) h.add(part(GEO.cyl, ACC.gold, .1-i*.025,.02,.1-i*.025, 0,.02,-.08-i*.1, Math.PI/2,0,0));
+    h.add(part(GEO.box, wm.body, .12,.09,.18, 0,-.06,.04));
+    g.add(h); g.userData.recoil.push(h); return g; },
+  railx(){ const g=new THREE.Group(); g.userData.caps=[]; g.userData.recoil=[];
+    for(const sd of [-1,1]){ const b=new THREE.Group(); b.position.x=sd*.09;
+      b.add(part(GEO.cyl, wm.body, .05,.48,.05, 0,0,-.2, Math.PI/2,0,0));
+      b.add(part(GEO.cone, wm.glow, .04,.08,.04, 0,0,-.48, -Math.PI/2,0,0));
+      g.add(b); g.userData.recoil.push(b); }
+    const cap=part(GEO.box, new THREE.MeshLambertMaterial({color:0x16323f, emissive:0x000000}), .22,.08,.24, 0,-.08,-.05);
+    g.add(cap); g.userData.caps.push(cap); return g; },
+  acid(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const f=new THREE.Group();
+    f.add(part(GEO.sphere, ACC.acid, .09,.11,.09, 0,.04,.04));
+    f.add(part(GEO.cyl, ACC.dark, .035,.26,.035, 0,0,-.16, Math.PI/2.2,0,0));
+    f.add(part(GEO.cone, ACC.acid, .04,.06,.04, 0,-.04,-.3, Math.PI/2,0,0));
+    g.add(f); g.userData.recoil.push(f); return g; },
+  anti(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const b=new THREE.Group();
+    b.add(part(GEO.sphere, ACC.dark, .15,.15,.15, 0,0,.06));
+    const chamber=part(GEO.sphere, ACC.violet, .09,.09,.09, 0,0,.06);
+    b.add(chamber); g.userData.chamber=chamber;
+    b.add(part(GEO.cyl, ACC.dark, .07,.3,.07, 0,0,-.2, Math.PI/2,0,0));
+    b.add(part(new THREE.TorusGeometry(.09,.015,6,16), ACC.violet, 1,1,1, 0,0,-.34));
+    g.add(b); g.userData.recoil.push(b); return g; },
+  orbital(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const d=new THREE.Group();
+    d.add(part(GEO.cyl, wm.body, .12,.03,.12, 0,.05,-.05, Math.PI/2.6,0,0));
+    d.add(part(GEO.cyl, ACC.white, .008,.22,.008, 0,.14,-.05));
+    d.add(part(GEO.sphere, ACC.red, .02,.02,.02, 0,.26,-.05));
+    d.add(part(GEO.box, wm.body, .12,.08,.16, 0,-.05,.02));
+    g.add(d); g.userData.recoil.push(d); return g; },
+  crossbow(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const c=new THREE.Group();
+    c.add(part(GEO.box, ACC.dark, .04,.04,.5, 0,0,-.1));
+    c.add(part(GEO.box, wm.body, .4,.03,.04, 0,.02,-.3, 0,0,0));
+    c.add(part(GEO.box, wm.body, .04,.03,.12, -.19,.02,-.26, 0,.6,0));
+    c.add(part(GEO.box, wm.body, .04,.03,.12, .19,.02,-.26, 0,-.6,0));
+    c.add(part(GEO.cone, ACC.green, .02,.1,.02, 0,.05,-.34, -Math.PI/2,0,0));
+    g.add(c); g.userData.recoil.push(c); return g; },
+  echo(){ const g=new THREE.Group(); g.userData.recoil=[];
+    const e=new THREE.Group();
+    for(let i=0;i<3;i++) e.add(part(new THREE.TorusGeometry(.05+i*.035,.012,6,18), ACC.ice, 1,1,1, 0,.02,-.1-i*.07));
+    e.add(part(GEO.box, wm.body, .12,.1,.16, 0,-.06,.04));
+    g.add(e); g.userData.recoil.push(e); return g; }
+});
 function buildWeapons(){
   const sk = SKINS[save.skin]||SKINS.neon;
   // глянцевый металл с бликом — оружие ловит свет, а не выглядит пластилином
@@ -1392,7 +1581,7 @@ function buildWeapons(){
   setWeapon(curWeapon,true);
 }
 function setWeapon(name, silent){
-  if(!(totalScore()>=W[name].unlock || name===save.trialW)){
+  if(!(ARSENAL || totalScore()>=W[name].unlock || name===save.trialW)){
     if(!silent) toast('🔒 нужно '+W[name].unlock+' очков всего'); return; }
   stopAllCharge();
   curWeapon=name; wcool=Math.min(wcool,.2);
@@ -1416,7 +1605,7 @@ function nextWeapon(){ // цикл по доступным (включая пр�
   const keys=Object.keys(W), i=keys.indexOf(curWeapon);
   for(let st=1; st<=keys.length; st++){
     const k=keys[(i+st)%keys.length];
-    if(totalScore()>=W[k].unlock || k===save.trialW){ setWeapon(k); break; }
+    if(ARSENAL || totalScore()>=W[k].unlock || k===save.trialW){ setWeapon(k); break; }
   }
 }
 
@@ -1438,7 +1627,27 @@ const CHIP_ICONS={
   needler:'<path d="M3 16l11-3M5 20l11-4M4 12l9-3"/>',
   gauss:'<circle cx="12" cy="12" r="6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
   bfg:'<circle cx="12" cy="12" r="4.5" fill="currentColor" stroke="none"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.5 5.5l2 2M16.5 16.5l2 2M18.5 5.5l-2 2M7.5 16.5l-2 2"/>',
-  sing:'<path d="M12 4a8 8 0 1 1-8 8"/><path d="M12 8a4 4 0 1 0 4 4"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>'
+  sing:'<path d="M12 4a8 8 0 1 1-8 8"/><path d="M12 8a4 4 0 1 0 4 4"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+  plasmagun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
+  rockets:'<path d="M8 3c2 2 2 8 0 12-2-4-2-10 0-12zM16 5c2 2 2 8 0 12-2-4-2-10 0-12z"/><path d="M8 17v4M16 19v3"/>',
+  shuriken:'<path fill="currentColor" stroke="none" d="M12 2l2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z"/>',
+  harpoon:'<path d="M3 12h15M18 12l-4-4M18 12l-4 4M18 8v8"/>',
+  mines:'<circle cx="12" cy="12" r="5"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3M6.5 6.5L9 9M15 15l2.5 2.5M17.5 6.5L15 9M9 15l-2.5 2.5"/>',
+  boomerang:'<path d="M4 18c2-8 8-14 16-14-2 6-6 10-12 12z"/>',
+  chain:'<path d="M7 2 4 12h5l-3 10 9-13H9l4-9z"/>',
+  flame:'<path d="M12 21c-4 0-6-3-6-6 0-4 4-5 4-9 3 2 2 4 4 6 1-1 1-2 1-3 2 2 3 4 3 6 0 3-2 6-6 6z"/>',
+  frost:'<circle cx="12" cy="13" r="5"/><path d="M12 2v6M9 5l3 3 3-3"/>',
+  pinball:'<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/><path d="M4 6l4 4M20 6l-4 4M4 18l4-4M20 18l-4-4"/>',
+  gatlas:'<circle cx="12" cy="8" r="1.6"/><circle cx="16" cy="12" r="1.6"/><circle cx="12" cy="16" r="1.6"/><circle cx="8" cy="12" r="1.6"/><path d="M12 12h9"/>',
+  swarm:'<path d="M5 5c1 1 1 4 0 6-1-2-1-5 0-6zM12 3c1 1 1 4 0 6-1-2-1-5 0-6zM19 5c1 1 1 4 0 6-1-2-1-5 0-6zM8 13c1 1 1 4 0 6-1-2-1-5 0-6zM16 13c1 1 1 4 0 6-1-2-1-5 0-6z"/>',
+  tornado:'<path d="M4 6h16M6 10h12M8 14h8M10 18h4"/>',
+  helios:'<circle cx="12" cy="12" r="3.5"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
+  railx:'<path d="M2 9h14M13 5l6 4-6 4M2 15h14M13 19l6-4"/>',
+  acid:'<path d="M12 3c3 4 6 7 6 11a6 6 0 1 1-12 0c0-4 3-7 6-11z"/>',
+  anti:'<circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
+  orbital:'<path d="M12 2v8M8 7l4 3 4-3"/><circle cx="12" cy="16" r="4"/><path d="M5 21h14"/>',
+  crossbow:'<path d="M12 21V8M4 8c3-4 13-4 16 0M12 8V4M9 21h6"/>',
+  echo:'<path d="M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M6 6a8.5 8.5 0 0 0 0 12M18 6a8.5 8.5 0 0 1 0 12"/>'
 };
 const chipsBox=$('chips');
 for(const k in W){
@@ -1486,8 +1695,8 @@ function makeProj(skin){
 }
 for(let i=0;i<26;i++) makeProj('bolt');
 for(let i=0;i<4;i++) makeProj('axe');
-for(let i=0;i<4;i++) makeProj('disc');
-for(let i=0;i<6;i++) makeProj('orb');
+for(let i=0;i<8;i++) makeProj('disc');
+for(let i=0;i<12;i++) makeProj('orb');
 
 function fireProj(o){
   const b=bolts.find(b=>b.life<=0 && b.skin===(o.skin||'bolt'));
@@ -1496,6 +1705,8 @@ function fireProj(o){
   b.grav=o.grav||0; b.homing=o.homing||0; b.pierce=o.pierce||0;
   b.ricochet=o.ricochet||0; b.aoe=o.aoe||0; b.prox=o.prox||0;
   b.suck=o.suck||0; b.melt=o.melt||0; b.boomEnd=!!o.boomEnd; b.spin=o.spin||0;
+  b.decel=o.decel||0; b.returnAfter=o.returnAfter||0; b.frost=o.frost||0; b.trail=o.trail||0;
+  b.returning=false;
   b.m.visible=true; b.m.position.copy(o.origin);
   b.glow.material.color.set(o.color); b.glow.material.opacity=1;
   b.glow.scale.setScalar(o.glowScale||.35);
@@ -1694,6 +1905,165 @@ const FIRE = {
     kick(W.sing.model,.14); flashMuzzle(0xb88cff); SFX.sing(); vibrate([10,40,10,40]);
   }
 };
+Object.assign(FIRE,{
+  plasmagun(){ // разрывная плазма очередью
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
+    fireProj({weapon:'plasmagun', skin:'orb', origin:o, dir:convergedDir(o,22), speed:26,
+      color:0x66ff99, coreColor:0xc8ffd8, orbScale:.08, glowScale:.4, life:1.6, aoe:.9});
+    kick(W.plasmagun.model,.06); flashMuzzle(0x66ff99); SFX.plasmagun(); vibrate(12);
+  },
+  rockets(){ // пара разрывных самонаводящихся ракет
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
+    for(const sd of [-1,1]){
+      const d=convergedDir(o,20,2).add(_v1.set(sd*.3,.15,0)).normalize();
+      fireProj({weapon:'rockets', origin:o, dir:d, speed:16, color:0xff6644,
+        glowScale:.34, life:2.6, homing:6, aoe:2, trail:0xffcc88});
+    }
+    kick(W.rockets.model,.16,-.15); flashMuzzle(0xff6644); SFX.rockets(); vibrate([20,30,20]); shake(3,.1);
+  },
+  shuriken(){
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
+    for(let i=-1;i<=1;i++){
+      const d=convergedDir(o,18).add(_v1.set(i*.12,0,0)).normalize();
+      fireProj({weapon:'shuriken', skin:'disc', origin:o, dir:d, speed:32,
+        color:0xb8f8ff, glowScale:.26, life:2, spin:22, ricochet:1});
+    }
+    kick(W.shuriken.model,.07); SFX.shuriken(); vibrate(14);
+  },
+  harpoon(){ // пробивает всех на линии полёта
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
+    const d=convergedDir(o,30,2.5);
+    fireProj({weapon:'harpoon', origin:o, dir:d, speed:55, color:0xcfe6ff,
+      coreColor:0xffffff, glowScale:.3, life:1.1, pierce:99});
+    beamLine(o, o.clone().addScaledVector(d,8), 0xcfe6ff, .02, .1);
+    kick(W.harpoon.model,.18,-.05); flashMuzzle(0xcfe6ff); SFX.harpoon(); vibrate(22);
+  },
+  mines(){ // плавучие мины с прокси-взрывателем
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
+    for(const sd of [-1,1]){
+      const d=convergedDir(o,14).add(_v1.set(sd*.2,.1,0)).normalize();
+      fireProj({weapon:'mines', skin:'orb', origin:o, dir:d, speed:10, color:0xcc88ff,
+        coreColor:0x2a1040, orbScale:.1, glowScale:.5, life:6, decel:2.2, prox:1.6, aoe:2.4});
+    }
+    kick(W.mines.model,.08); SFX.mines(); vibrate(10);
+  },
+  boomerang(){
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
+    fireProj({weapon:'boomerang', skin:'disc', origin:o, dir:convergedDir(o,18), speed:26,
+      color:0xffd166, glowScale:.34, life:3, spin:18, pierce:9, returnAfter:.55});
+    kick(W.boomerang.model,.1,-.2); SFX.boomerang(); vibrate(16);
+  },
+  chain(){ // цепная молния до 6 целей
+    const dir=assistDir(aimDir(), 9*DEG, .9);
+    const camP=camera.getWorldPosition(_v1).clone();
+    let from=muzzleWorld().clone().addScaledVector(dir,.4), hits=0, target=null;
+    ray.set(camP, dir);
+    let bd=1.4;
+    for(const f of fishes){
+      const d=Math.sqrt(ray.ray.distanceSqToPoint(f.pos));
+      if(d<bd){ bd=d; target=f; }
+    }
+    while(target && hits<6){
+      beamLine(from, target.pos, 0xaaccff, .035+rand(0,.02), .2);
+      from=target.pos.clone();
+      const victim=target;
+      target=nearestFish(from, 7);
+      if(target===victim) target=null;
+      hitFish(victim,'chain'); state.hits++; hits++;
+    }
+    if(!hits) beamLine(from, camP.addScaledVector(dir,30), 0xaaccff, .02, .12);
+    if(hits>=3) shake(5,.15);
+    kick(W.chain.model,.12); flashMuzzle(0xaaccff); SFX.chain(); vibrate([12,20,12,20]);
+  },
+  frost(){ // навесная крио-граната: взрыв + область холода
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
+    const d=convergedDir(o,12).add(_v1.set(0,.25,0)).normalize();
+    fireProj({weapon:'frost', skin:'orb', origin:o, dir:d, speed:15, color:0x9fe8ff,
+      coreColor:0xe8fbff, orbScale:.11, glowScale:.55, life:1.6, grav:6, aoe:1.8, frost:4.2, boomEnd:true});
+    kick(W.frost.model,.1,-.18); SFX.frost(); vibrate(16);
+  },
+  pinball(){ // шар-рикошет: до 6 перескоков
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
+    fireProj({weapon:'pinball', skin:'orb', origin:o, dir:convergedDir(o,20), speed:40,
+      color:0xf2f8ff, coreColor:0xffffff, orbScale:.07, glowScale:.45, life:2.4, ricochet:6});
+    kick(W.pinball.model,.09); flashMuzzle(0xf2f8ff); SFX.pinball(); vibrate(14);
+  },
+  gatlas(){ // лазерный гатлинг: ливень красных лучей после раскрутки
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
+    const d=convergedDir(o,25,2).add(_v1.set(rand(-1,1),rand(-1,1),rand(-1,1)).multiplyScalar(.014)).normalize();
+    fireProj({weapon:'gatlas', origin:o, dir:d, speed:60, color:0xff5050,
+      coreColor:0xff9090, glowScale:.2, life:1.1});
+    kick(W.gatlas.model,.02); flashMuzzle(0xff5050); SFX.gatlas(); vibrate(5);
+  },
+  swarm(){ // шесть мини-ракет с агрессивным самонаведением
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
+    for(let i=0;i<6;i++){
+      const a=i*1.047;
+      const d=convergedDir(o,16,2).add(_v1.set(Math.cos(a)*.35, .2+Math.sin(a)*.2, 0)).normalize();
+      fireProj({weapon:'swarm', origin:o, dir:d, speed:14, color:0xffaa33,
+        glowScale:.22, life:2.8, homing:8, aoe:.8, trail:0xffd9a0});
+    }
+    kick(W.swarm.model,.14,-.1); flashMuzzle(0xffaa33); SFX.swarm(); vibrate([10,15,10,15,10]); shake(2,.08);
+  },
+  tornado(){ // вихрь: тащит рыб за собой и лопается
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
+    fireProj({weapon:'tornado', skin:'orb', origin:o, dir:convergedDir(o,14), speed:7,
+      color:0x7ef2e0, coreColor:0xd8fff8, orbScale:.14, glowScale:.9, life:2.2,
+      suck:14, aoe:2.6, boomEnd:true, spin:10});
+    kick(W.tornado.model,.12); SFX.tornado(); vibrate([15,40,15]);
+  },
+  orbital(){ // маркер → столб света с неба
+    const dir=assistDir(aimDir(), 6*DEG, .9);
+    ray.set(camera.getWorldPosition(_v1).clone(), dir);
+    let target=null, bd=2;
+    for(const f of fishes){
+      const d=Math.sqrt(ray.ray.distanceSqToPoint(f.pos));
+      if(d<bd){ bd=d; target=f; }
+    }
+    const pos=target? target.pos.clone() : camera.getWorldPosition(_v1).clone().addScaledVector(dir,11);
+    strikes.push({pos, t:.9, warn:0});
+    shockRing(pos, 0xeaf6ff);
+    kick(W.orbital.model,.06); SFX.orbital(); vibrate(12);
+  },
+  crossbow(){ // стрела-вердикт: всё в поле зрения гибнет каскадом
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.4);
+    beamLine(o, o.clone().addScaledVector(dir,45), 0xd0ffe8, .025, .25);
+    fireProj({weapon:'crossbow', origin:o, dir, speed:70, color:0xd0ffe8,
+      coreColor:0xffffff, glowScale:.3, life:.6, pierce:99});
+    const targets=[];
+    for(const f of fishes){
+      _v1.copy(f.pos).applyMatrix4(camera.matrixWorldInverse);
+      if(_v1.z<0){
+        _v2.copy(f.pos).project(camera);
+        if(Math.abs(_v2.x)<1 && Math.abs(_v2.y)<1) targets.push(f);
+      }
+    }
+    targets.sort((a,b)=>a.pos.distanceToSquared(camera.position)-b.pos.distanceToSquared(camera.position));
+    targets.forEach((f,i)=>volley.push({f, t:.1+i*.09}));
+    if(targets.length) state.hits++;
+    if(targets.length>=4) toast('ВЕРДИКТ ×'+targets.length);
+    kick(W.crossbow.model,.2,-.1); camKick=1.5*DEG;
+    flashMuzzle(0xd0ffe8); screenFlash(''); SFX.crossbow(); vibrate([20,20,60]); shake(4,.15);
+  },
+  echo(){ // нова: ударная волна вокруг игрока
+    const camP=camera.getWorldPosition(_v1).clone();
+    explodeAt(camP, 5.5, 'echo');
+    for(let i=0;i<4;i++){
+      const a=i*1.5708;
+      shockRing(_v2.set(camP.x+Math.cos(a)*2, camP.y, camP.z+Math.sin(a)*2), 0x9fdfff);
+    }
+    screenFlash(''); camKick=1.8*DEG;
+    kick(W.echo.model,.18); SFX.echo(); vibrate([40,40,40,40,120]); shake(8,.25);
+  },
+  acid(){ // кислотный плевок: плавит на пролёте и лопается
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
+    const d=convergedDir(o,12).add(_v1.set(0,.18,0)).normalize();
+    fireProj({weapon:'acid', skin:'orb', origin:o, dir:d, speed:13, color:0x8aff3a,
+      coreColor:0xd8ffb0, orbScale:.1, glowScale:.5, life:2, grav:5, melt:1.1,
+      aoe:1.6, boomEnd:true, trail:0x8aff3a});
+    kick(W.acid.model,.09,-.12); SFX.acid(); vibrate(14);
+  }
+});
 const RELEASE = {
   rail(){
     const w=W.rail;
@@ -1732,6 +2102,45 @@ const RELEASE = {
     flashMuzzle(0x6aff6a); SFX.bfg(); vibrate([30,30,80]); shake(4,.12);
   }
 };
+Object.assign(RELEASE,{
+  railx(){ // дуплет: два параллельных рельсовых луча
+    const w=W.railx;
+    w.reload=w.reloadMax;
+    state.shots++;
+    const dir=assistDir(aimDir(), 1.5*DEG, .5);
+    const camP=camera.getWorldPosition(_v1).clone();
+    const right=_v2.setFromMatrixColumn(camera.matrixWorld,0).clone();
+    let any=false, killed=0;
+    for(const sd of [-1,1]){
+      const orig=camP.clone().addScaledVector(right, sd*.35);
+      ray.set(orig, dir);
+      for(const f of [...fishes]){
+        if(!f.alive) continue;
+        if(ray.ray.distanceSqToPoint(f.pos) < f.radius*f.radius*1.6){
+          hitFish(f,'railx'); any=true; killed++;
+        }
+      }
+      if(whale.active && ray.ray.distanceSqToPoint(whale.g.position)<5){ hitWhale('railx',2); any=true; }
+      beamLine(orig.clone().addScaledVector(dir,.5), orig.clone().addScaledVector(dir,80), 0xb0f8ff, .05, .2);
+    }
+    if(any) state.hits++;
+    if(killed>1){ toast('ДУПЛЕТ ×'+killed); shake(7,.2); }
+    kick(w.model,.2); camKick=2.8*DEG;
+    flashMuzzle(0xb0f8ff); screenFlash('');
+    SFX.railx(); vibrate([25,20,25,20,60]); shake(6,.18);
+  },
+  anti(){ // антиматерия: медленная сфера всепоглощения
+    const w=W.anti;
+    w.reload=w.reloadMax;
+    state.shots++;
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.55);
+    fireProj({weapon:'anti', skin:'orb', origin:o, dir:convergedDir(o,18), speed:6.5,
+      color:0xcc66ff, coreColor:0x120020, orbScale:.22, glowScale:1.3, life:2.8,
+      suck:7, melt:1.6, aoe:4.5, boomEnd:true});
+    kick(w.model,.24,-.08); camKick=2.4*DEG;
+    flashMuzzle(0xcc66ff); SFX.anti(); vibrate([30,30,30,90]); shake(5,.16);
+  }
+});
 function tryFire(){
   if(state.mode!=='play' || state.paused || wcool>0) return;
   const wd=W[curWeapon];
@@ -1761,9 +2170,8 @@ function releaseCharge(){
   $('cross').classList.add('fire'); setTimeout(()=>$('cross').classList.remove('fire'),90);
 }
 
-function vulcanWhir(spin){ // нарастающий вой раскрутки стволов
+function whirSnd(v, spin){ // нарастающий вой раскрутки стволов
   if(!AU.started) return;
-  const v=W.vulcan;
   if(spin>.02){
     if(!v.snd){
       const o=AU.ctx.createOscillator(), g=AU.ctx.createGain();
@@ -1791,13 +2199,14 @@ function updateWeapons(dt, firingHeld){
   camKick*=(1-Math.min(1,dt*6));
   if(muzzleFrames>0){ if(--muzzleFrames===0) muzzleLight.intensity=0; }
   const cur=W[curWeapon];
-  // вулкан: раскрутка стволов
-  if(W.vulcan.model){
-    const v=W.vulcan;
-    v.spin=clamp(v.spin+((firingHeld&&curWeapon==='vulcan')?dt/v.spinup:-dt*1.6),0,1);
-    v.model.userData.spinGrp.rotation.z+=v.spin*dt*40;
-    vulcanWhir(v.spin);
-    if(v.spin>0&&v.spin<1&&curWeapon==='vulcan'&&firingHeld&&Math.random()<.3) vibrate(4);
+  // раскрутка многоствольных (Вулкан, Лаз-гатлинг)
+  for(const k in W){
+    const v=W[k];
+    if(!v.spinup || !v.model) continue;
+    v.spin=clamp((v.spin||0)+((firingHeld&&curWeapon===k)?dt/v.spinup:-dt*1.6),0,1);
+    if(v.model.userData.spinGrp) v.model.userData.spinGrp.rotation.z+=v.spin*dt*40;
+    whirSnd(v, k===curWeapon? v.spin : 0);
+    if(k===curWeapon&&v.spin>0&&v.spin<1&&firingHeld&&Math.random()<.3) vibrate(4);
   }
   // авто-огонь
   if(firingHeld && cur.mode==='auto' && state.mode==='play') tryFire();
@@ -1806,36 +2215,38 @@ function updateWeapons(dt, firingHeld){
     cur.charge=Math.min(1, cur.charge+dt/1.1);
     if(Math.random()<cur.charge*.3) vibrate(8);
   }
-  if(W.rail.model){
-    const caps=W.rail.model.userData.caps, e=W.rail.charging?W.rail.charge:0;
-    for(const cap of caps){
+  for(const k in W){ // подсветка заряда: конденсаторы и шарокамеры всех charge-стволов
+    const wd=W[k], md=wd.model; if(!md) continue;
+    const e=wd.charging?wd.charge:0;
+    if(md.userData.caps) for(const cap of md.userData.caps){
       if(e>0) cap.material.emissive.setRGB(e*.1, e*.8, e);
       else cap.material.emissive.multiplyScalar(.9);
     }
+    if(md.userData.chamber) md.userData.chamber.scale.setScalar(.09*(1+e*.6+.08*Math.sin(now*6)));
   }
-  if(W.bfg.model){
-    const ch=W.bfg.model.userData.chamber, e=W.bfg.charging?W.bfg.charge:0;
-    ch.scale.setScalar(.09*(1+e*.6+.08*Math.sin(now*6)));
-  }
-  // крио-луч
-  if(cur===W.freeze && cur.beaming && state.mode==='play'){
+  // лучевые орудия (крио / огнемёт / гелиос) — общий конус
+  const bc=cur.beamCfg;
+  if(bc && cur.beaming && state.mode==='play'){
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.3);
+    const R=bc.range;
     cryoCone.visible=true;
-    cryoCone.position.copy(o).addScaledVector(dir,6.5);
-    cryoCone.scale.set(1.5,13,1.5);
-    cryoCone.lookAt(_v1.copy(o).addScaledVector(dir,14));
+    cryoCone.material.color.set(bc.color);
+    cryoCone.position.copy(o).addScaledVector(dir,R/2);
+    cryoCone.scale.set(bc.width,R,bc.width);
+    cryoCone.lookAt(_v1.copy(o).addScaledVector(dir,R+1));
     cryoCone.rotateX(-Math.PI/2);
     cryoCone.material.opacity=.12+.05*Math.sin(now*22);
     cur.tick-=dt;
-    if(cur.tick<=0){ cur.tick=.16; SFX.freezeTick(); }
+    if(cur.tick<=0){ cur.tick=.16; SFX[bc.snd](); }
     const camP=camera.getWorldPosition(_v1);
     for(const f of [...fishes]){
       _v2.copy(f.pos).sub(camP);
       const d=_v2.length();
-      if(d<13 && _v2.normalize().dot(dir)>.992){
-        f.cold=.5; f.freezeAcc=(f.freezeAcc||0)+dt;
-        if(Math.random()<dt*9) burst(f.pos, 0xbfeaff, .7, 8, .35, .5, .07); // иней
-        if(f.freezeAcc>1){ hitFish(f,'freeze'); state.hits++; }
+      if(d<R && _v2.normalize().dot(dir)>bc.cone){
+        if(bc.slow) f.cold=.5;
+        f.freezeAcc=(f.freezeAcc||0)+dt*bc.rate;
+        if(Math.random()<dt*9) burst(f.pos, bc.color, .7, 8, .35, .5, .07);
+        if(f.freezeAcc>1){ hitFish(f, bc.killAs); state.hits++; }
       }
     }
   }else cryoCone.visible=false;
@@ -1939,7 +2350,35 @@ function explodeAt(pos, radius, weapon){
   scareNear(pos, radius+3);
   return killed;
 }
+function freezeNear(pos, r){ // область холода: рыбы вязнут
+  for(const f of fishes){
+    if(f.pos.distanceToSquared(pos)<r*r){ f.cold=2; f.fear=.5;
+      burst(f.pos, 0xbfeaff, .6, 8, .4, .5, .08); }
+  }
+}
+const volley=[]; // отложенные каскадные смерти (арбалет)
+const strikes=[]; // орбитальные удары с задержкой
+function updateSpecials(dt){
+  for(let i=volley.length-1;i>=0;i--){
+    const v=volley[i]; v.t-=dt;
+    if(v.t<=0){
+      if(v.f.alive){ hitFish(v.f,'crossbow'); state.hits++; }
+      volley.splice(i,1);
+    }
+  }
+  for(let i=strikes.length-1;i>=0;i--){
+    const st=strikes[i]; st.t-=dt;
+    if(st.warn!==1 && st.t<.45){ st.warn=1; shockRing(st.pos, 0xeaf6ff); SFX.combo(8); }
+    if(st.t<=0){
+      beamLine(_v1.copy(st.pos).add(_v2.set(0,25,0)), st.pos, 0xffffff, .3, .3);
+      explodeAt(st.pos, 3, 'orbital');
+      screenFlash('gold'); shake(7,.2); vibrate([30,30,90]);
+      strikes.splice(i,1);
+    }
+  }
+}
 function updateProjectiles(dt){
+  updateSpecials(dt);
   for(const b of bolts){
     if(b.life<=0) continue;
     b.life-=dt;
@@ -1965,6 +2404,18 @@ function updateProjectiles(dt){
         if(f.pos.distanceToSquared(b.m.position)<b.melt*b.melt){ hitFish(f,'bfg'); state.hits++; }
       }
     }
+    if(b.decel) b.vel.multiplyScalar(Math.max(0, 1-b.decel*dt)); // мины тормозят и ждут
+    if(b.returnAfter>0){ // бумеранг: после пика возвращается к стрелку
+      b.returnAfter-=dt;
+      if(b.returnAfter<=0) b.returning=true;
+    }
+    if(b.returning){
+      _v1.copy(camera.position).sub(b.m.position);
+      if(_v1.length()<1.2){ b.life=0; b.m.visible=false; continue; }
+      b.vel.copy(_v1.normalize()).multiplyScalar(b.speed0);
+    }
+    if(b.trail && Math.random()<dt*14) // дымный след ракет
+      burst(b.m.position, b.trail, .4, 6, .25, .2, .07);
     if(b.grav) b.vel.y-=b.grav*dt;
     b.m.position.addScaledVector(b.vel, dt);
     if(b.spin&&b.spinMesh) b.spinMesh.rotation.x+=b.spin*dt;
@@ -1972,6 +2423,7 @@ function updateProjectiles(dt){
     // прокси-взрыватель
     if(b.prox && nearestFish(b.m.position, b.prox, false)){
       explodeAt(b.m.position, b.aoe, b.weapon);
+      if(b.frost) freezeNear(b.m.position, b.frost);
       b.life=0; b.m.visible=false; continue;
     }
     let dead=false;
@@ -1980,7 +2432,8 @@ function updateProjectiles(dt){
       const r=f.radius+(b.skin==='orb'?.4:.18);
       const d2=b.m.position.distanceToSquared(f.pos);
       if(d2<r*r){
-        if(b.aoe){ explodeAt(b.m.position, b.aoe, b.weapon); dead=true; break; }
+        if(b.aoe){ explodeAt(b.m.position, b.aoe, b.weapon);
+          if(b.frost) freezeNear(b.m.position, b.frost); dead=true; break; }
         hitFish(f, b.weapon); state.hits++;
         if(b.pierce>0){ b.pierce--; continue; }
         if(b.ricochet>0){
@@ -2004,7 +2457,8 @@ function updateProjectiles(dt){
     if(dead){ b.life=0; b.m.visible=false; continue; }
     if(b.life<=0){
       b.m.visible=false;
-      if(b.boomEnd) explodeAt(b.m.position, b.aoe||2, b.weapon);
+      if(b.boomEnd){ explodeAt(b.m.position, b.aoe||2, b.weapon);
+        if(b.frost) freezeNear(b.m.position, b.frost); }
       else{ burst(b.m.position, 0x6fd8e8, .8, 10, .3, 2, .08); scareNear(b.m.position, 2); }
     }
   }
@@ -2040,7 +2494,7 @@ function checkUnlocks(){
 function refreshChips(){
   document.querySelectorAll('.chip').forEach(c=>{
     const k=c.dataset.w;
-    c.classList.toggle('lock', !(totalScore()>=W[k].unlock || k===save.trialW));
+    c.classList.toggle('lock', !(ARSENAL || totalScore()>=W[k].unlock || k===save.trialW));
   });
 }
 function updateComboHud(){
@@ -2240,7 +2694,7 @@ $('muteBtn').addEventListener('pointerdown', e=>e.stopPropagation());
 $('muteBtn').addEventListener('click', e=>{
   e.stopPropagation();
   save.muted=!save.muted; persist();
-  if(AU.master) AU.master.gain.value=save.muted?0:.85;
+  if(AU.master) AU.master.gain.value=save.muted?0:1.0;
   if(atmo.el) atmo.el.volume=save.muted?0:.22;
   $('muteBtn').textContent=save.muted?'🔇':'🔊';
 });
