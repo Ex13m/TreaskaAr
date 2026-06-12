@@ -60,6 +60,12 @@
   #cross.hit .ring{border-color:var(--gold);box-shadow:0 0 18px var(--gold)}
   #cross.hit{transform:translate(-50%,-50%) scale(1.28)}
   #cross.fire{transform:translate(-50%,-50%) scale(.82)}
+  #cross.jam{animation:jam .18s}
+  @keyframes jam{25%{margin-left:-4px}75%{margin-left:4px}}
+  #chargeRing{position:absolute;left:50%;top:50%;width:78px;height:78px;transform:translate(-50%,-50%);
+    border-radius:50%;opacity:0;pointer-events:none;transition:opacity .12s;
+    -webkit-mask:radial-gradient(closest-side,transparent 78%,#000 80%);
+    mask:radial-gradient(closest-side,transparent 78%,#000 80%)}
 
   /* weapon chips */
   #chips{position:absolute;bottom:max(14px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
@@ -69,14 +75,16 @@
   .chip{position:relative;min-width:78px;flex:0 0 auto;padding:9px 10px 7px;text-align:center;cursor:pointer;
     border-radius:14px;border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(8px);
     font-family:inherit;color:#9fd8e8;font-size:9px;letter-spacing:.08em;overflow:hidden;transition:all .15s}
-  .chip .ico{font-size:18px;display:block;margin-bottom:2px;filter:drop-shadow(0 0 6px rgba(25,240,255,.5))}
+  .chip .ico{width:20px;height:20px;display:block;margin:0 auto 2px;stroke:currentColor;fill:none;
+    stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 6px rgba(25,240,255,.5))}
   .chip.sel{color:#04222b;background:linear-gradient(160deg,var(--teal2),var(--teal));border-color:var(--teal2);
     box-shadow:0 0 22px rgba(25,240,255,.55);font-weight:700}
   .chip.lock{opacity:.45;filter:grayscale(.8)}
   .chip .bar{position:absolute;left:0;bottom:0;height:3px;width:0;background:var(--gold);box-shadow:0 0 8px var(--gold)}
-  #muteBtn{position:absolute;top:max(10px,env(safe-area-inset-top));left:50%;transform:translate(-50%,52px);
+  #muteBtn,#pauseBtn{position:absolute;top:max(10px,env(safe-area-inset-top));left:50%;transform:translate(-50%,52px);
     pointer-events:auto;background:none;border:1px solid var(--line);border-radius:10px;color:#9fd8e8;
     font-size:14px;padding:4px 10px;cursor:pointer}
+  #pauseBtn{transform:translate(calc(-50% - 58px),52px)}
 
   /* fx layers */
   #fxLayer,#radarLayer{position:absolute;inset:0;overflow:hidden;pointer-events:none}
@@ -95,7 +103,7 @@
   #flash.gold{background:radial-gradient(ellipse at center,transparent 50%,rgba(255,209,102,.5) 100%)}
   #vignette{position:fixed;inset:0;z-index:2;pointer-events:none;
     background:radial-gradient(ellipse at center,transparent 62%,rgba(2,6,14,.55) 100%)}
-  #toast{position:fixed;top:22%;left:50%;transform:translateX(-50%) scale(.8);z-index:8;padding:12px 22px;
+  #toast{position:fixed;top:max(64px,11%);left:50%;transform:translateX(-50%) scale(.8);z-index:8;padding:12px 22px;
     font-weight:900;font-size:15px;letter-spacing:.1em;color:var(--gold);opacity:0;pointer-events:none;
     text-align:center;transition:all .25s;text-shadow:0 0 18px var(--gold)}
   #toast.show{opacity:1;transform:translateX(-50%) scale(1)}
@@ -116,7 +124,7 @@
   .bigbtn:active{transform:scale(.95)}
   .ghostbtn{font-family:inherit;font-size:12px;color:var(--teal);background:none;cursor:pointer;
     border:1px solid var(--line);border-radius:12px;padding:10px 18px}
-  #howto{display:flex;gap:22px;font-size:10px;opacity:.85}
+  #howto{display:flex;gap:18px;font-size:10px;opacity:.85;flex-wrap:wrap;justify-content:center;max-width:420px}
   #howto div{display:flex;flex-direction:column;gap:6px;align-items:center;max-width:86px}
   #howto .pic{font-size:26px}
   #permNote{font-size:9px;opacity:.45;max-width:300px;line-height:1.6}
@@ -156,10 +164,16 @@
     </div>
   </div>
   <button id="muteBtn">🔊</button>
+  <button id="pauseBtn">⏸</button>
   <div id="cross"><div class="ring"></div><div class="tick t1"></div><div class="tick t2"></div><div class="tick t3"></div><div class="tick t4"></div><div class="dot"></div></div>
+  <div id="chargeRing"></div>
   <div id="chips"></div>
 </div>
 <div id="toast"></div>
+<div id="pauseOv" class="screen off" style="z-index:9;background:rgba(5,13,26,.82)">
+  <h1 style="font-size:30px">ПАУЗА</h1>
+  <button id="resumeBtn" class="bigbtn">▶ ПРОДОЛЖИТЬ</button>
+</div>
 
 <div id="startScreen" class="screen">
   <div id="fishHero">🐟</div>
@@ -169,9 +183,11 @@
     <div><span class="pic">📱</span>крути телефоном — целься</div>
     <div><span class="pic">🎯</span>лови треску в прицел</div>
     <div><span class="pic">👆</span>тап — выстрел, удержание — заряд</div>
+    <div><span class="pic">💣</span>в красную фугу НЕ стреляй</div>
   </div>
   <button id="startBtn" class="bigbtn">▶ СТАРТ</button>
   <div id="skinRow"></div>
+  <div id="optRow" style="display:flex;gap:8px"></div>
   <div id="offlineNote">⚠ офлайн-режим: камера недоступна, играем в «северном небе»</div>
   <div id="permNote">по кнопке СТАРТ браузер спросит доступ к камере и гироскопу — они нужны для дополненной реальности; без них включится резервный режим</div>
 </div>
@@ -200,7 +216,7 @@ import * as THREE from 'three';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '4.1.0';
+const VERSION = '4.2.0';
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
 const rand = (a,b)=>a+Math.random()*(b-a);
@@ -208,7 +224,7 @@ const TAU = Math.PI*2, DEG = Math.PI/180;
 
 /* ---------------- сохранения ---------------- */
 const SAVE_KEY = 'podstreli-tresku-v1';
-let save = {total:0,best:0,skin:'neon',muted:false};
+let save = {total:0,best:0,skin:'neon',muted:false,vibe:true,shake:true,lastDay:'',trialW:null,fuguTaught:false};
 try{ Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY)||'{}')); }catch(e){}
 const persist = ()=>{ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }catch(e){} };
 
@@ -385,15 +401,17 @@ function audioInit(){
 async function loadSamplePack(){
   try{
     const man=await (await fetch('sfx/manifest.json')).json();
-    const out={};
-    for(const k in man){
+    const out={}; let total=0;
+    await Promise.all(Object.keys(man).map(async k=>{
       out[k]=[];
       for(const u of man[k]){
-        const ab=await (await fetch('sfx/'+u)).arrayBuffer();
-        out[k].push(await AU.ctx.decodeAudioData(ab));
+        try{
+          const ab=await (await fetch('sfx/'+u)).arrayBuffer();
+          out[k].push(await AU.ctx.decodeAudioData(ab)); total++;
+        }catch(e){ /* битый или неподдерживаемый файл — пропускаем */ }
       }
-    }
-    AU.samples=out;
+    }));
+    if(total) AU.samples=out;
   }catch(e){ /* пака нет — остаёмся на процедурном синтезе */ }
 }
 function playSample(kind,pos){
@@ -589,6 +607,8 @@ const SFX = {
     const dest=spatialDest(pos);
     tone({type:'sine',f0:130,f1:35,dur:.4,g:.38,dest});
     noiseHit({ft:'lowpass',f0:3500,f1:120,dur:.35,g:.28,dest}); },
+  failClick(){ tone({type:'square',f0:170,f1:120,dur:.06,g:.12});
+    noiseHit({ft:'lowpass',f0:600,dur:.04,g:.08}); },
   gull(){ if(!AU.started) return; const t0=at();
     tone({t:t0,type:'sine',f0:1400,f1:2400,dur:.12,g:.025});
     tone({t:t0+.15,type:'sine',f0:1600,f1:900,dur:.18,g:.02}); },
@@ -607,19 +627,17 @@ function ambientStart(){ // ветер
 /* атмосферная музыка: либо трек из music/ (см. README), либо генеративные
    арктические пэды — медленная прогрессия Am–F–C–Em, три расстроенных
    осциллятора через фильтр с LFO + посыл в реверб. */
-const atmo={on:false, next:0, chord:0, nodes:null, gain:null, sample:null};
+const atmo={on:false, next:0, chord:0, nodes:null, gain:null, sample:null, el:null};
 const ATMO_CHORDS=[[110,164.8,220,329.6],[87.3,130.8,174.6,261.6],[130.8,196,261.6,392],[82.4,123.5,164.8,246.9]];
 async function atmoStart(){
   if(atmo.on||!AU.started) return;
   atmo.on=true;
-  try{ // если в music/ лежит трек — играем его лупом
+  try{ // если в music/ лежит трек — стримим его <audio>, не съедая память декодом
     const man=await (await fetch('music/manifest.json')).json();
-    const ab=await (await fetch('music/'+man.tracks[(Math.random()*man.tracks.length)|0])).arrayBuffer();
-    const buf=await AU.ctx.decodeAudioData(ab);
-    const src=AU.ctx.createBufferSource(); src.buffer=buf; src.loop=true;
-    const g=AU.ctx.createGain(); g.gain.value=.22;
-    src.connect(g); g.connect(AU.master); src.start();
-    atmo.sample=src; atmo.gain=g;
+    const el=new Audio('music/'+man.tracks[(Math.random()*man.tracks.length)|0]);
+    el.loop=true; el.volume=save.muted?0:.22;
+    await el.play();
+    atmo.el=el;
     return;
   }catch(e){ /* трека нет — генерируем сами */ }
   atmo.gain=AU.ctx.createGain(); atmo.gain.value=.05; // фоновый слой, не мешает игре
@@ -628,7 +646,7 @@ async function atmoStart(){
   atmoChord();
 }
 function atmoChord(){
-  if(!atmo.on||atmo.sample) return;
+  if(!atmo.on||atmo.el) return;
   const t0=at(), dur=7.5, freqs=ATMO_CHORDS[atmo.chord%ATMO_CHORDS.length];
   atmo.chord++;
   for(const f of freqs){
@@ -667,7 +685,7 @@ function musicTick(){
     music.next += spb; music.step++;
   }
 }
-function vibrate(p){ if(navigator.vibrate) try{ navigator.vibrate(p); }catch(e){} }
+function vibrate(p){ if(save.vibe===false) return; if(navigator.vibrate) try{ navigator.vibrate(p); }catch(e){} }
 
 /* ============ виды рыб: GPU-инстансинг ============
    Каждый вид запечён в ОДНУ геометрию с цветом по вершинам и рендерится
@@ -1087,7 +1105,7 @@ function updateFX(dt){
 }
 /* экранные эффекты */
 let shakeT=0, shakeAmp=0;
-function shake(amp=4,t=.12){ shakeT=Math.max(shakeT,t); shakeAmp=amp; }
+function shake(amp=4,t=.12){ if(save.shake===false) return; shakeT=Math.max(shakeT,t); shakeAmp=amp; }
 function screenFlash(cls){
   const f=$('flash'); f.className=cls||''; f.style.transition='none'; f.style.opacity=.9;
   requestAnimationFrame(()=>{ f.style.transition='opacity .35s'; f.style.opacity=0; });
@@ -1374,7 +1392,8 @@ function buildWeapons(){
   setWeapon(curWeapon,true);
 }
 function setWeapon(name, silent){
-  if(totalScore() < W[name].unlock){ if(!silent) toast('🔒 нужно '+W[name].unlock+' очков всего'); return; }
+  if(!(totalScore()>=W[name].unlock || name===save.trialW)){
+    if(!silent) toast('🔒 нужно '+W[name].unlock+' очков всего'); return; }
   stopAllCharge();
   curWeapon=name; wcool=Math.min(wcool,.2);
   for(const k in W){ if(W[k].model) W[k].model.visible=(k===name); W[k].beaming=false; }
@@ -1393,12 +1412,39 @@ function stopAllCharge(){
   }
 }
 
-/* чипы орудий генерируются из реестра, ряд прокручивается */
+function nextWeapon(){ // цикл по доступным (включая пробный ствол)
+  const keys=Object.keys(W), i=keys.indexOf(curWeapon);
+  for(let st=1; st<=keys.length; st++){
+    const k=keys[(i+st)%keys.length];
+    if(totalScore()>=W[k].unlock || k===save.trialW){ setWeapon(k); break; }
+  }
+}
+
+/* чипы орудий генерируются из реестра; иконки — инлайн-SVG,
+   чтобы не зависеть от эмодзи-шрифтов платформы */
+const CHIP_ICONS={
+  turret:'<path fill="currentColor" stroke="none" d="M13 2 7 13h4l-2 9 8-13h-5z"/>',
+  laser:'<path d="M2 9h13M2 15h10M18 12h4"/><circle cx="16" cy="12" r="1.6"/>',
+  rail:'<path d="M2 12h14M13 7l7 5-7 5"/>',
+  axe:'<path d="M8 21 14 9"/><path fill="currentColor" stroke="none" d="M12 4c5-3 9 1 7 6-4 1-7-1-7-6z"/>',
+  shotgun:'<path d="M3 12h7M10 12l10-5M10 12l10 5"/>',
+  plasma:'<circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="9" stroke-dasharray="2 4"/>',
+  vulcan:'<circle cx="12" cy="6.5" r="1.8"/><circle cx="17" cy="9.5" r="1.8"/><circle cx="17" cy="14.5" r="1.8"/><circle cx="12" cy="17.5" r="1.8"/><circle cx="7" cy="14.5" r="1.8"/><circle cx="7" cy="9.5" r="1.8"/>',
+  arc:'<path d="M4 5l5 5-3 2 7 7M14 4l4 4-3 2 4 6"/>',
+  flak:'<path d="M12 4v16M4 12h16M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  homing:'<path d="M12 3c3 3 3 10 0 15-3-5-3-12 0-15z"/><path d="M9 14l-3 4M15 14l3 4M12 18v3"/>',
+  disc:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.5"/>',
+  freeze:'<path d="M12 3v18M5 6.8l14 10.4M19 6.8 5 17.2"/>',
+  needler:'<path d="M3 16l11-3M5 20l11-4M4 12l9-3"/>',
+  gauss:'<circle cx="12" cy="12" r="6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
+  bfg:'<circle cx="12" cy="12" r="4.5" fill="currentColor" stroke="none"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.5 5.5l2 2M16.5 16.5l2 2M18.5 5.5l-2 2M7.5 16.5l-2 2"/>',
+  sing:'<path d="M12 4a8 8 0 1 1-8 8"/><path d="M12 8a4 4 0 1 0 4 4"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>'
+};
 const chipsBox=$('chips');
 for(const k in W){
   const b=document.createElement('button');
   b.className='chip'; b.dataset.w=k;
-  b.innerHTML='<span class="ico">'+W[k].ico+'</span>'+W[k].name+'<div class="bar"></div>';
+  b.innerHTML='<svg class="ico" viewBox="0 0 24 24">'+(CHIP_ICONS[k]||'')+'</svg>'+W[k].name+'<div class="bar"></div>';
   b.addEventListener('pointerdown', e=>e.stopPropagation());
   b.addEventListener('click', e=>{ e.stopPropagation(); setWeapon(k); });
   chipsBox.appendChild(b);
@@ -1687,7 +1733,7 @@ const RELEASE = {
   }
 };
 function tryFire(){
-  if(state.mode!=='play' || wcool>0) return;
+  if(state.mode!=='play' || state.paused || wcool>0) return;
   const wd=W[curWeapon];
   if(wd.mode==='auto' && wd.spinup && (wd.spin||0)<1) return; // вулкан ещё раскручивается
   wcool=wd.cd||.2;
@@ -1705,12 +1751,33 @@ function releaseCharge(){
   if(!wd.charging) return;
   wd.charging=false;
   if(wd.chargeSnd){ wd.chargeSnd.stop(); wd.chargeSnd=null; }
-  if(wd.charge<.3){ wd.charge=0; return; } // недозаряд — холостой
+  if(wd.charge<.3){ // недозаряд — слышимый «осечка»-клик
+    wd.charge=0; SFX.failClick();
+    $('cross').classList.add('jam'); setTimeout(()=>$('cross').classList.remove('jam'),200);
+    return;
+  }
   wd.charge=0;
   RELEASE[curWeapon]();
   $('cross').classList.add('fire'); setTimeout(()=>$('cross').classList.remove('fire'),90);
 }
 
+function vulcanWhir(spin){ // нарастающий вой раскрутки стволов
+  if(!AU.started) return;
+  const v=W.vulcan;
+  if(spin>.02){
+    if(!v.snd){
+      const o=AU.ctx.createOscillator(), g=AU.ctx.createGain();
+      o.type='sawtooth'; g.gain.value=0;
+      o.connect(g); g.connect(AU.master); o.start();
+      v.snd={o,g};
+    }
+    v.snd.o.frequency.value=120+spin*520;
+    v.snd.g.gain.value=.035*spin;
+  }else if(v.snd){
+    try{ v.snd.o.stop(); }catch(e){}
+    v.snd=null;
+  }
+}
 function updateWeapons(dt, firingHeld){
   wcool=Math.max(0,wcool-dt);
   // пружины отдачи: корпус + объявленные части
@@ -1729,6 +1796,7 @@ function updateWeapons(dt, firingHeld){
     const v=W.vulcan;
     v.spin=clamp(v.spin+((firingHeld&&curWeapon==='vulcan')?dt/v.spinup:-dt*1.6),0,1);
     v.model.userData.spinGrp.rotation.z+=v.spin*dt*40;
+    vulcanWhir(v.spin);
     if(v.spin>0&&v.spin<1&&curWeapon==='vulcan'&&firingHeld&&Math.random()<.3) vibrate(4);
   }
   // авто-огонь
@@ -1766,6 +1834,7 @@ function updateWeapons(dt, firingHeld){
       const d=_v2.length();
       if(d<13 && _v2.normalize().dot(dir)>.992){
         f.cold=.5; f.freezeAcc=(f.freezeAcc||0)+dt;
+        if(Math.random()<dt*9) burst(f.pos, 0xbfeaff, .7, 8, .35, .5, .07); // иней
         if(f.freezeAcc>1){ hitFish(f,'freeze'); state.hits++; }
       }
     }
@@ -1788,24 +1857,36 @@ function updateWeapons(dt, firingHeld){
     }
     c._bar.style.width=(clamp(v,0,1)*100)+'%';
   }
+  // кольцо заряда/раскрутки вокруг прицела — статус виден, не отводя глаз
+  const cr=$('chargeRing');
+  let cv=0, ccol='#ffd166';
+  if(cur.charging) cv=cur.charge;
+  else if(cur.spinup && cur.spin>0 && cur.spin<1){ cv=cur.spin; ccol='#fff0a0'; }
+  cr.style.opacity=cv>0?1:0;
+  if(cv>0) cr.style.background='conic-gradient('+ccol+' '+(cv*360)+'deg, rgba(255,255,255,.08) 0)';
 }
 
 /* ---------------- попадания и снаряды ---------------- */
 const HIT_COLORS={freeze:0xbfeaff};
 for(const k in W) HIT_COLORS[k]=W[k].color;
-function hitFish(f, weapon, ptsScale=1){
+function hitFish(f, weapon, ptsScale=1, viaAoe=false){
   if(!f.alive) return;
   const sp=SPECIES[f.type], pos=f.pos.clone();
   killFishVisual(f);
   if(f.type==='fugu'){
-    state.score=Math.max(0, state.score+sp.score);
-    state.combo=0; updateComboHud();
+    // прямое попадание — полный штраф и сброс комбо;
+    // задело взрывом «за компанию» — вполовину и комбо живёт
+    const dmg = viaAoe? -100 : sp.score;
+    state.score=Math.max(0, state.score+dmg);
+    if(!viaAoe){ state.combo=0; updateComboHud(); }
     burst(pos, 0xff3344, 6, 36, .8, 3, .22);
     shockRing(pos, 0xff3344);
-    screenFlash('red'); shake(9,.3);
+    screenFlash('red'); shake(viaAoe?5:9, viaAoe?.15:.3);
     SFX.fugu(pos); vibrate([60,40,120]);
-    popNumber(pos, '−200', 'bad');
+    popNumber(pos, viaAoe?'−100':'−200', 'bad');
     state.kills.fugu=(state.kills.fugu||0)+1;
+    if(!save.fuguTaught){ save.fuguTaught=true; persist();
+      toast('💣 Это была ФУГУ! В неё нельзя стрелять — минус очки и комбо', 3000); }
     return;
   }
   state.combo=Math.min(10, state.combo+1);
@@ -1851,7 +1932,7 @@ function explodeAt(pos, radius, weapon){
   SFX.boom(pos); shake(4,.12);
   let killed=0;
   for(const f of [...fishes]){
-    if(f.pos.distanceToSquared(pos)<radius*radius){ hitFish(f, weapon); killed++; }
+    if(f.pos.distanceToSquared(pos)<radius*radius){ hitFish(f, weapon, 1, true); killed++; }
   }
   if(whale.active && whale.g.position.distanceToSquared(pos)<(radius+1.5)*(radius+1.5)) hitWhale(weapon);
   if(killed) state.hits++;
@@ -1942,7 +2023,7 @@ function slowmo(){ timeScale=.25; slowT=.7; }
 /* ---------------- состояние игры ---------------- */
 const state = {
   mode:'menu', score:0, combo:0, comboT:0, shots:0, hits:0, kills:{},
-  timeLeft:90, rush:false, bestCombo:0, spawnTick:0
+  timeLeft:90, rush:false, bestCombo:0, spawnTick:0, paused:false
 };
 const totalScore = ()=> save.total + (state.mode==='play'?state.score:0);
 const unlockedNow = {_skins: save.total>=10000};
@@ -1958,7 +2039,8 @@ function checkUnlocks(){
 }
 function refreshChips(){
   document.querySelectorAll('.chip').forEach(c=>{
-    c.classList.toggle('lock', totalScore()<W[c.dataset.w].unlock);
+    const k=c.dataset.w;
+    c.classList.toggle('lock', !(totalScore()>=W[k].unlock || k===save.trialW));
   });
 }
 function updateComboHud(){
@@ -1973,12 +2055,15 @@ function desiredFishCount(elapsed){
 function startRound(){
   state.mode='play'; state.score=0; state.combo=0; state.comboT=0;
   state.shots=0; state.hits=0; state.kills={}; state.timeLeft=90; state.rush=false; state.bestCombo=0;
+  state.paused=false; $('pauseOv').classList.add('off');
   while(fishes.length) killFishVisual(fishes[0]);
   whale.active=false; whale.g.visible=false; whale.timer=rand(20,32);
   $('startScreen').classList.add('off'); $('endScreen').classList.add('off');
   $('hud').classList.add('on');
   $('hudBest').textContent='РЕКОРД '+save.best;
   refreshChips();
+  // если пробный доступ кончился, а ствол ещё залочен — вернуться на турель
+  if(!(totalScore()>=W[curWeapon].unlock || curWeapon===save.trialW)) setWeapon('turret', true);
   if(AU.ctx && AU.ctx.state==='suspended') AU.ctx.resume();
 }
 function endRound(){
@@ -1990,7 +2075,20 @@ function endRound(){
   if(acc>.6){ bonus=Math.round(state.score*.1); state.score+=bonus; }
   const isRecord = state.score>save.best;
   if(isRecord) save.best=state.score;
-  save.total+=state.score; persist();
+  save.total+=state.score;
+  // дневной бонус: первая партия дня кладёт +50% очков в копилку прогрессии
+  const day=new Date().toDateString();
+  let daily=0;
+  if(save.lastDay!==day){ save.lastDay=day; daily=Math.round(state.score*.5); save.total+=daily; }
+  // пробный ствол: за рекорд — самый дешёвый из закрытых на следующий раунд
+  save.trialW=null;
+  if(isRecord){
+    const locked=Object.keys(W).filter(k=>save.total<W[k].unlock);
+    if(locked.length) save.trialW=locked[0];
+  }
+  persist();
+  if(daily>0) toast('🎁 ДНЕВНОЙ БОНУС: +'+daily+' в копилку', 2400);
+  else if(save.trialW) toast('🎁 За рекорд: '+W[save.trialW].name+' — пробный доступ на раунд', 2600);
   // заполнить таблицу
   $('endScore').textContent=state.score;
   $('newRecord').style.display=isRecord?'block':'none';
@@ -2105,8 +2203,8 @@ function releaseFire(cancel){
   if(wd.mode==='beam') wd.beaming=false;
 }
 stage.addEventListener('pointerdown', e=>{
-  if(state.mode!=='play') return;
-  if(ptrId!==null) return;
+  if(state.mode!=='play' || state.paused) return;
+  if(ptrId!==null){ nextWeapon(); return; } // второй палец — смена орудия
   ptrId=e.pointerId; ptrStart={x:e.clientX,y:e.clientY}; lastPtr={x:e.clientX,y:e.clientY}; dragging=false;
   pressFire();
 });
@@ -2136,22 +2234,29 @@ addEventListener('keydown', e=>{
   const keys=Object.keys(W);
   const n='1234567890'.indexOf(e.key);
   if(n>=0 && keys[n]) setWeapon(keys[n]);
-  if(e.key==='q'||e.key==='й'){ // следующее доступное
-    const i=keys.indexOf(curWeapon);
-    for(let s=1;s<=keys.length;s++){
-      const k=keys[(i+s)%keys.length];
-      if(totalScore()>=W[k].unlock){ setWeapon(k); break; }
-    }
-  }
+  if(e.key==='q'||e.key==='й') nextWeapon();
 });
 $('muteBtn').addEventListener('pointerdown', e=>e.stopPropagation());
 $('muteBtn').addEventListener('click', e=>{
   e.stopPropagation();
   save.muted=!save.muted; persist();
   if(AU.master) AU.master.gain.value=save.muted?0:.85;
+  if(atmo.el) atmo.el.volume=save.muted?0:.22;
   $('muteBtn').textContent=save.muted?'🔇':'🔊';
 });
 $('muteBtn').textContent=save.muted?'🔇':'🔊';
+$('pauseBtn').addEventListener('pointerdown', e=>e.stopPropagation());
+$('pauseBtn').addEventListener('click', e=>{
+  e.stopPropagation();
+  if(state.mode!=='play'||state.paused) return;
+  state.paused=true; releaseFire(true);
+  $('pauseOv').classList.remove('off');
+  if(atmo.el) atmo.el.pause();
+});
+$('resumeBtn').addEventListener('click', ()=>{
+  state.paused=false; $('pauseOv').classList.add('off');
+  if(atmo.el) atmo.el.play().catch(()=>{});
+});
 
 /* ---------------- камера AR + разрешения ---------------- */
 let camOK=false;
@@ -2181,7 +2286,18 @@ function buildSkinRow(){
     const b=document.createElement('button');
     b.className='skinbtn sk-'+k+(save.skin===k?' sel':'')+((k!=='neon'&&save.total<10000)?' lock':'');
     b.title=k;
-    b.addEventListener('click',()=>{ save.skin=k; persist(); buildWeapons(); buildSkinRow(); });
+    b.addEventListener('click',()=>{ save.skin=k; persist(); buildWeapons(); buildSkinRow();
+function buildOptRow(){
+  const row=$('optRow'); row.innerHTML='';
+  for(const [k,label] of [['vibe','📳 вибро'],['shake','📺 тряска']]){
+    const b=document.createElement('button');
+    b.className='ghostbtn'; b.style.opacity=save[k]?1:.4;
+    b.textContent=label+': '+(save[k]?'вкл':'выкл');
+    b.addEventListener('click',()=>{ save[k]=!save[k]; persist(); buildOptRow(); });
+    row.appendChild(b);
+  }
+}
+buildOptRow(); });
     row.appendChild(b);
   }
 }
@@ -2227,8 +2343,13 @@ $('shareBtn').addEventListener('click', async ()=>{
 
 /* ---------------- пауза при сворачивании ---------------- */
 document.addEventListener('visibilitychange', ()=>{
-  if(document.hidden){ if(AU.ctx) AU.ctx.suspend(); }
-  else if(AU.ctx && !save.muted) AU.ctx.resume();
+  if(document.hidden){
+    if(AU.ctx) AU.ctx.suspend();
+    if(atmo.el) atmo.el.pause();
+  }else{
+    if(AU.ctx && !save.muted) AU.ctx.resume();
+    if(atmo.el && !state.paused) atmo.el.play().catch(()=>{});
+  }
 });
 
 /* ---------------- PWA ---------------- */
@@ -2284,6 +2405,7 @@ function loop(t){
   bubbles.att.needsUpdate=true;
   raysG.rotation.y+=sdt*.01;
   if(seaU && envFallback.visible) seaU.value=now;
+  if(!state.paused){
   updateWhale(sdt);
   updateFish(sdt);
   updateProjectiles(sdt);
@@ -2291,6 +2413,7 @@ function loop(t){
   updateWeapons(dt, firingHeld);
   updateGame(sdt);
   musicTick();
+  }
   // тряска экрана
   if(shakeT>0){ shakeT-=dt;
     renderer.domElement.style.transform='translate('+rand(-shakeAmp,shakeAmp)+'px,'+rand(-shakeAmp,shakeAmp)+'px)';

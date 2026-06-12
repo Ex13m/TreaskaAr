@@ -1,17 +1,69 @@
 {
-  "turret":  ["turret-000.ogg","turret-001.ogg","turret-002.ogg","turret-003.ogg"],
-  "laser":   ["laser-0.ogg","laser-1.ogg","laser-2.ogg"],
-  "rail":    ["rail-000.ogg","rail-001.ogg","rail-002.ogg"],
-  "shotgun": ["shotgun-000.ogg","shotgun-001.ogg","shotgun-002.ogg"],
-  "vulcan":  ["vulcan-000.ogg","vulcan-001.ogg","vulcan-002.ogg"],
-  "plasma":  ["plasma-0.ogg","plasma-1.ogg"],
-  "arc":     ["arc-0.ogg","arc-1.ogg","arc-2.ogg"],
-  "flak":    ["flak-0.ogg","flak-1.ogg"],
-  "needler": ["needler-0.ogg","needler-1.ogg"],
-  "gauss":   ["gauss-0.ogg"],
-  "bfg":     ["bfg-0.ogg"],
-  "sing":    ["sing-0.ogg","sing-1.ogg"],
-  "hit":     ["hit-000.ogg","hit-001.ogg","hit-002.ogg","hit-003.ogg"],
-  "trophy":  ["trophy-0.ogg","trophy-1.ogg"],
-  "boom":    ["boom-0.ogg","boom-1.ogg"]
+  "turret": [
+    "turret-000.m4a",
+    "turret-001.m4a",
+    "turret-002.m4a",
+    "turret-003.m4a"
+  ],
+  "laser": [
+    "laser-0.m4a",
+    "laser-1.m4a",
+    "laser-2.m4a"
+  ],
+  "rail": [
+    "rail-000.m4a",
+    "rail-001.m4a",
+    "rail-002.m4a"
+  ],
+  "shotgun": [
+    "shotgun-000.m4a",
+    "shotgun-001.m4a",
+    "shotgun-002.m4a"
+  ],
+  "vulcan": [
+    "vulcan-000.m4a",
+    "vulcan-001.m4a",
+    "vulcan-002.m4a"
+  ],
+  "plasma": [
+    "plasma-0.m4a",
+    "plasma-1.m4a"
+  ],
+  "arc": [
+    "arc-0.m4a",
+    "arc-1.m4a",
+    "arc-2.m4a"
+  ],
+  "flak": [
+    "flak-0.m4a",
+    "flak-1.m4a"
+  ],
+  "needler": [
+    "needler-0.m4a",
+    "needler-1.m4a"
+  ],
+  "gauss": [
+    "gauss-0.m4a"
+  ],
+  "bfg": [
+    "bfg-0.m4a"
+  ],
+  "sing": [
+    "sing-0.m4a",
+    "sing-1.m4a"
+  ],
+  "hit": [
+    "hit-000.m4a",
+    "hit-001.m4a",
+    "hit-002.m4a",
+    "hit-003.m4a"
+  ],
+  "trophy": [
+    "trophy-0.m4a",
+    "trophy-1.m4a"
+  ],
+  "boom": [
+    "boom-0.m4a",
+    "boom-1.m4a"
+  ]
 }

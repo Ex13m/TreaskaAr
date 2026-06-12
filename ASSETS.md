@@ -14,6 +14,9 @@
 
 ## Звуки (`sfx/`) — Kenney, CC0
 
+Файлы перекодированы из Ogg Vorbis в M4A (AAC 96 кбит/с), потому что
+iOS Safari не декодирует Vorbis. Содержимое и лицензия не изменились.
+
 Источник: kenney.nl — паки «Sci-Fi Sounds» и «Digital Audio»
 (зеркала: github.com/Boyquotes/kenney-sci-fi-sounds-for-godot,
 github.com/Boyquotes/kenney-digital-audio-for-godot).
