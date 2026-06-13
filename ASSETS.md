@@ -9,7 +9,7 @@
 
 | Файлы | Пак |
 |---|---|
-| guns/AR_*, SMG_*, Pistol_*, Sniper_*, Crossbow_1, Grenade_* | Modular Sci-Fi Guns |
+| guns/Crossbow_1, Sniper_1, Grenade_2, SMG_1, Pistol_3 | Modular Sci-Fi Guns |
 | Whale.glb | Fish Pack (Левиафан) |
 
 ## Музыка (`music/`) — FreePD, CC0

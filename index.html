@@ -225,7 +225,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '6.0.0';
+const VERSION = '6.1.0';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -1614,11 +1614,16 @@ Object.assign(BUILD,{
 });
 /* Настоящие 3D-модели оружия (Quaternius, CC0) из models/guns/.
    Не загрузились (офлайн) — остаются процедурные. */
+// GLB только там, где это РАЗНЫЕ силуэты-архетипы. Иконические стволы
+// (турель, бластер, дробовик, вулкан, гатлинг…) остаются процедурными —
+// у них собственный узнаваемый вид, а пять одинаковых GLB-винтовок AR_*
+// как раз и делали «много похожего оружия».
 const GLB_GUNS={
-  turret:'AR_1', laser:'AR_2', shotgun:'AR_3', bfg:'AR_5', anti:'AR_6',
-  plasmagun:'SMG_1', needler:'SMG_2', arc:'Pistol_1', plasma:'Pistol_2', acid:'Pistol_3',
-  rail:'Sniper_1', gauss:'Sniper_2', railx:'Sniper_3', crossbow:'Crossbow_1',
-  homing:'Grenade_1', rockets:'Grenade_2', flak:'Grenade_3'
+  crossbow:'Crossbow_1', // уникальный силуэт арбалета
+  rail:    'Sniper_1',   // длинный ствол снайперки под рельсотрон
+  rockets: 'Grenade_2',  // гранатомёт
+  plasmagun:'SMG_1',     // компактный SMG
+  acid:    'Pistol_3'    // пистолет
 };
 function normGun(sceneObj){
   // нормализация: длинная ось → Z, дуло (тонкий конец) → -Z, длина ~0.55 м
@@ -1677,8 +1682,8 @@ function loadGunModels(){
 function buildWeapons(){
   const sk = SKINS[save.skin]||SKINS.neon;
   // PBR-металл: отражает окружение, как «нормальный рендер»
-  wm.body = new THREE.MeshStandardMaterial({color:sk.body, metalness:.85, roughness:.3,
-    envMapIntensity:1, emissive:sk.body, emissiveIntensity:.08});
+  wm.body = new THREE.MeshStandardMaterial({color:sk.body, metalness:.6, roughness:.32,
+    envMapIntensity:1, emissive:sk.body, emissiveIntensity:.16});
   wm.glow = new THREE.MeshBasicMaterial({color:sk.glow});
   while(weaponRoot.children.length) weaponRoot.remove(weaponRoot.children[0]);
   for(const k in W){
@@ -1948,11 +1953,12 @@ const FIRE = {
       color:0x6aff6a, coreColor:0xb0ffb0, glowScale:.7, life:2.2, aoe:2.4, boomEnd:true});
     kick(W.plasma.model,.12); flashMuzzle(0x6aff6a); SFX.plasma(); vibrate(20);
   },
-  vulcan(){ // ливень слабых болтов, разброс растёт с темпом
+  vulcan(){ // ПУЛЕМЁТ: широкий «шланг» жёлтых трассеров, большой разброс
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.55);
-    const d=convergedDir(o,25,2).add(_v1.set(rand(-1,1),rand(-1,1),rand(-1,1)).multiplyScalar(.018)).normalize();
-    fireProj({weapon:'vulcan', origin:o, dir:d, speed:46, color:0xfff0a0, glowScale:.22, life:1.4});
-    kick(W.vulcan.model,.02); flashMuzzle(0xfff0a0); SFX.vulcan(); vibrate(6);
+    const d=convergedDir(o,25,2).add(_v1.set(rand(-1,1),rand(-1,1),rand(-1,1)).multiplyScalar(.045)).normalize();
+    fireProj({weapon:'vulcan', origin:o, dir:d, speed:44, color:0xfff0a0, glowScale:.24, life:1.4});
+    burst(o, 0xffd060, 1.5, 4, .12, 0, .1); // вылет гильзы-искры
+    kick(W.vulcan.model,.03); flashMuzzle(0xfff0a0); SFX.vulcan(); vibrate(6);
   },
   arc(){ // цепная молния: до 3 целей
     const dir=assistDir(aimDir(), 8*DEG, .9);
@@ -2129,11 +2135,11 @@ Object.assign(FIRE,{
       color:0xf2f8ff, coreColor:0xffffff, orbScale:.07, glowScale:.45, life:2.4, ricochet:6});
     kick(W.pinball.model,.09); flashMuzzle(0xf2f8ff); SFX.pinball(); vibrate(14);
   },
-  gatlas(){ // лазерный гатлинг: ливень красных лучей после раскрутки
+  gatlas(){ // ЛАЗ-ГАТЛИНГ: точные красные лучи, пробивают насквозь
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
-    const d=convergedDir(o,25,2).add(_v1.set(rand(-1,1),rand(-1,1),rand(-1,1)).multiplyScalar(.014)).normalize();
-    fireProj({weapon:'gatlas', origin:o, dir:d, speed:60, color:0xff5050,
-      coreColor:0xff9090, glowScale:.2, life:1.1});
+    const d=convergedDir(o,25,1).add(_v1.set(rand(-1,1),rand(-1,1),rand(-1,1)).multiplyScalar(.004)).normalize();
+    fireProj({weapon:'gatlas', origin:o, dir:d, speed:72, color:0xff5050,
+      coreColor:0xff9090, glowScale:.18, life:1.1, pierce:2});
     kick(W.gatlas.model,.02); flashMuzzle(0xff5050); SFX.gatlas(); vibrate(5);
   },
   swarm(){ // шесть мини-ракет с агрессивным самонаведением
