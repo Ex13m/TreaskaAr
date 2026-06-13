@@ -225,13 +225,9 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '7.0.1';
+const VERSION = '7.0.0';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
-// мобильный профиль: дешевле рендер, чтобы держать FPS при свинге телефона
-const IOS = /iPad|iPhone|iPod/i.test(navigator.userAgent)
-  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iОС-профиль рендера; Android/десктоп — без изменений
-const PR_CAP = IOS ? 1.5 : 2;
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
 const rand = (a,b)=>a+Math.random()*(b-a);
 const TAU = Math.PI*2, DEG = Math.PI/180;
@@ -243,8 +239,8 @@ try{ Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY)||'{}')); }cat
 const persist = ()=>{ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }catch(e){} };
 
 /* ---------------- рендер ---------------- */
-const renderer = new THREE.WebGLRenderer({antialias:!IOS, alpha:true, powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio,PR_CAP));
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; // киношная тонкривая
 renderer.toneMappingExposure = 1.12;
@@ -252,10 +248,10 @@ $('stage').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, .05, 200);
 scene.add(camera);
-scene.add(new THREE.HemisphereLight(0xbfe8ff, 0x0a1a2e, IOS?1.7:1.1));
-const sun = new THREE.DirectionalLight(0xfff4e0, IOS?1.9:1.5); sun.position.set(3,8,2); scene.add(sun);
-// PBR-окружение через PMREM дорого на мобильных GPU → только десктоп
-if(!IOS){
+scene.add(new THREE.HemisphereLight(0xbfe8ff, 0x0a1a2e, 1.1));
+const sun = new THREE.DirectionalLight(0xfff4e0, 1.5); sun.position.set(3,8,2); scene.add(sun);
+// PBR-окружение: metalness/roughness получают честные отражения
+{
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), .04).texture;
 }
@@ -1251,7 +1247,7 @@ const ACC={
   acid:  new THREE.MeshBasicMaterial({color:0x8aff3a}),
   white: new THREE.MeshBasicMaterial({color:0xf2f8ff}),
   gold:  new THREE.MeshBasicMaterial({color:0xffd166}),
-  dark:  new THREE.MeshStandardMaterial({color:0x2a3340, metalness:0.3, roughness:.55})
+  dark:  new THREE.MeshStandardMaterial({color:0x222a33, metalness:.9, roughness:.25})
 };
 const weaponRoot = new THREE.Group();
 weaponRoot.position.set(0,-.42,-.9); camera.add(weaponRoot);
@@ -1725,8 +1721,8 @@ function loadGunModels(){
 function buildWeapons(){
   const sk = SKINS[save.skin]||SKINS.neon;
   // PBR-металл: отражает окружение, как «нормальный рендер»
-  wm.body = new THREE.MeshStandardMaterial({color:sk.body, metalness:IOS?.25:.6, roughness:IOS?.5:.32,
-    envMapIntensity:1, emissive:sk.body, emissiveIntensity:IOS?.22:.16});
+  wm.body = new THREE.MeshStandardMaterial({color:sk.body, metalness:.6, roughness:.32,
+    envMapIntensity:1, emissive:sk.body, emissiveIntensity:.16});
   wm.glow = new THREE.MeshBasicMaterial({color:sk.glow});
   while(weaponRoot.children.length) weaponRoot.remove(weaponRoot.children[0]);
   for(const k in W){
@@ -3116,18 +3112,16 @@ if(!navigator.onLine) $('offlineNote').style.display='block';
    и UI не трогаем — деградирует только разрешение канваса. */
 const quality={scale:1, t:0, frames:0, fps:60};
 function applyQuality(){
-  const pr=Math.min(devicePixelRatio,PR_CAP)*quality.scale;
+  const pr=Math.min(devicePixelRatio,2)*quality.scale;
   renderer.setPixelRatio(pr); composer.setPixelRatio(pr);
 }
-// iOS — агрессивнее; Android/десктоп — ровно как в v7.0.0
-const Q_WIN=IOS?1:2, Q_LOW=IOS?55:50, Q_FLOOR=IOS?.45:.6, Q_STEP=IOS?.2:.15, Q_HI=IOS?58:57;
 function qualityTick(dt){
   quality.t+=dt; quality.frames++;
-  if(quality.t<Q_WIN) return;
+  if(quality.t<2) return;
   quality.fps=quality.frames/quality.t;
   quality.t=0; quality.frames=0;
-  if(quality.fps<Q_LOW && quality.scale>Q_FLOOR){ quality.scale=Math.max(Q_FLOOR, quality.scale-Q_STEP); applyQuality(); }
-  else if(quality.fps>Q_HI && quality.scale<1){ quality.scale=Math.min(1, quality.scale+.1); applyQuality(); }
+  if(quality.fps<50 && quality.scale>.6){ quality.scale=Math.max(.6, quality.scale-.15); applyQuality(); }
+  else if(quality.fps>57 && quality.scale<1){ quality.scale=Math.min(1, quality.scale+.1); applyQuality(); }
 }
 /* дебаг-оверлей: открой игру с ?debug — fps/дроуколлы/треугольники */
 const dbgEl=(()=>{
