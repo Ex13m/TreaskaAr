@@ -225,7 +225,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '6.1.0';
+const VERSION = '6.2.0';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -644,6 +644,13 @@ const SFX = {
   unlock(){ [440,554,659,880].forEach((f,i)=>tone({t:at()+i*.08,type:'triangle',f0:f,dur:.3,g:.15})); }
 };
 Object.assign(SFX,{
+  turbo(){ // тяжёлый корабельный залп: рёв + хлёсткий разряд + бас
+    const d=distNode(3);
+    tone({type:'sawtooth',f0:420,f1:70,dur:.4,g:.3,dest:d});
+    noiseHit({ft:'lowpass',f0:6000,f1:200,dur:.35,g:.3,dest:d});
+    tone({type:'sine',f0:60,f1:34,dur:.5,g:.45});
+    fmBell({f:240,dur:.5,g:.12,ratio:2.4,idx:5});
+  },
   piranhaGo(){ // выпуск стаи: всплеск + злобный стрёкот
     noiseHit({ft:'bandpass',f0:600,f1:1800,dur:.3,g:.25,q:1.5});
     for(let i=0;i<4;i++) tone({t:at()+i*.05,type:'square',f0:900+i*120,f1:500,dur:.04,g:.07});
@@ -1250,7 +1257,8 @@ function part(geo, mat, sx,sy,sz, px=0,py=0,pz=0, rx=0,ry=0,rz=0){
 /* ---- реестр орудий: данные + поведение ---- */
 const W = {
   turret: {name:'ТУРЕЛЬ',     ico:'⚡', unlock:0,     mode:'auto',   cd:.16,  color:0x19f0ff, side:0},
-  laser:  {name:'БЛАСТЕР',    ico:'🔴', unlock:1000,  mode:'auto',   cd:.13,  color:0xff4040},
+  laser:  {name:'БЛАСТЕР',    ico:'🔴', unlock:1000,  mode:'auto',   cd:.1,   color:0xff4040, side:0},
+  turbo:  {name:'ТУРБОЛАЗЕР', ico:'',  unlock:0,     mode:'tap',    cd:.85,  color:0x66ff66},
   rail:   {name:'РЕЛЬСОТРОН', ico:'🔱', unlock:2000,  mode:'charge', cd:0,    color:0xb0f8ff, reload:0, reloadMax:1.5},
   axe:    {name:'ТОПОР',      ico:'🪓', unlock:3500,  mode:'tap',    cd:.55,  color:0xffaa44},
   shotgun:{name:'ДРОБОВИК',   ico:'💥', unlock:5000,  mode:'tap',    cd:.55,  color:0xff9d4d},
@@ -1306,17 +1314,18 @@ const BUILD = {
     }
     return g;
   },
-  laser(){ // лазерная турель в духе «Звёздных войн»: спаренные длинные стволы
+  laser(){ // КВАДРО-ЛАЗЕР «Тысячелетнего сокола»: тарелка-турель + счетверённый ствол
     const g=new THREE.Group(); g.userData.recoil=[];
-    g.add(part(GEO.box, wm.body, .16,.12,.16, 0,-.04,.06));
-    for(const s of [-1,1]){
-      const b=new THREE.Group(); b.position.set(s*.07,.02,0);
-      b.add(part(GEO.cyl, ACC.dark, .022,.5,.022, 0,0,-.25, Math.PI/2,0,0));
-      b.add(part(GEO.cyl, ACC.red, .028,.04,.028, 0,0,-.5, Math.PI/2,0,0)); // дульный кончик
-      b.add(part(GEO.box, wm.body, .03,.05,.14, 0,-.03,-.05));
-      g.add(b); g.userData.recoil.push(b);
+    g.add(part(GEO.cyl, wm.body, .15,.05,.15, 0,-.08,.04, Math.PI/2,0,0)); // тарелка-основание
+    g.add(part(GEO.box, wm.body, .13,.11,.14, 0,-.02,.05));                // корпус турели
+    g.add(part(GEO.box, ACC.dark, .05,.06,.08, 0,.07,.07));                // прицел-блистер
+    const block=new THREE.Group(); block.position.z=-.08;                  // счетверённый ствол
+    for(const sx of [-1,1]) for(const sy of [-1,1]){
+      block.add(part(GEO.cyl, ACC.dark, .018,.5,.018, sx*.05,sy*.05+.01,-.25, Math.PI/2,0,0));
+      block.add(part(GEO.cyl, ACC.red,  .024,.05,.024, sx*.05,sy*.05+.01,-.5, Math.PI/2,0,0));
     }
-    g.add(part(GEO.box, ACC.dark, .05,.08,.1, 0,.07,.05)); // прицел-башенка
+    block.add(part(GEO.box, ACC.dark, .14,.14,.03, 0,.01,-.2)); // пластина-обойма дул
+    g.add(block); g.userData.recoil.push(block);
     return g;
   },
   rail(){
@@ -1472,6 +1481,15 @@ const BUILD = {
   }
 };
 Object.assign(BUILD,{
+  turbo(){ // тяжёлая корабельная пушка: толстый ствол + конденсаторные рёбра
+    const g=new THREE.Group(); g.userData.recoil=[];
+    const b=new THREE.Group();
+    b.add(part(GEO.cyl, wm.body, .075,.62,.075, 0,0,-.3, Math.PI/2,0,0));
+    b.add(part(GEO.cyl, ACC.green, .09,.06,.09, 0,0,-.58, Math.PI/2,0,0)); // дульное кольцо
+    for(const sd of [-1,1]) b.add(part(GEO.box, ACC.green, .025,.12,.36, sd*.1,0,-.16)); // светящиеся рёбра
+    b.add(part(GEO.box, wm.body, .12,.13,.22, 0,-.05,.1)); // ствольная коробка
+    g.add(b); g.userData.recoil.push(b); return g;
+  },
   piranha(){ // аквариум-пушка: бак с водой и пасть с зубами
     const g=new THREE.Group(); g.userData.recoil=[];
     const t=new THREE.Group();
@@ -1776,7 +1794,8 @@ const CHIP_ICONS={
   orbital:'<path d="M12 2v8M8 7l4 3 4-3"/><circle cx="12" cy="16" r="4"/><path d="M5 21h14"/>',
   crossbow:'<path d="M12 21V8M4 8c3-4 13-4 16 0M12 8V4M9 21h6"/>',
   echo:'<path d="M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M6 6a8.5 8.5 0 0 0 0 12M18 6a8.5 8.5 0 0 1 0 12"/>',
-  piranha:'<path d="M3 12c3-4 8-6 13-4l5 4-5 4c-5 2-10 0-13-4z"/><path d="M8 10l1.5 2L8 14M11 10l1.5 2-1.5 2M14 10l1.5 2-1.5 2" stroke-width="1.2"/><circle cx="6.5" cy="11" r=".9" fill="currentColor" stroke="none"/>'
+  piranha:'<path d="M3 12c3-4 8-6 13-4l5 4-5 4c-5 2-10 0-13-4z"/><path d="M8 10l1.5 2L8 14M11 10l1.5 2-1.5 2M14 10l1.5 2-1.5 2" stroke-width="1.2"/><circle cx="6.5" cy="11" r=".9" fill="currentColor" stroke="none"/>',
+  turbo:'<path d="M2 12h16M18 9l4 3-4 3z"/><path d="M6 8v8M9 9v6" stroke-width="1.4"/><circle cx="20" cy="12" r="1" fill="currentColor" stroke="none"/>'
 };
 const chipsBox=$('chips');
 for(const k in W){
@@ -1842,7 +1861,7 @@ function fireProj(o){
   b.ricochet=o.ricochet||0; b.aoe=o.aoe||0; b.prox=o.prox||0;
   b.suck=o.suck||0; b.melt=o.melt||0; b.boomEnd=!!o.boomEnd; b.spin=o.spin||0;
   b.decel=o.decel||0; b.returnAfter=o.returnAfter||0; b.frost=o.frost||0; b.trail=o.trail||0;
-  b.returning=false;
+  b.returning=false; b.bonus=o.bonus||1;
   b.m.visible=true; b.m.position.copy(o.origin);
   b.glow.material.color.set(o.color); b.glow.material.opacity=1;
   b.glow.scale.setScalar(o.glowScale||.35);
@@ -1896,10 +1915,14 @@ function convergedDir(origin, dist=25, assist=3){
   const dir=assistDir(aimDir(), assist*DEG);
   return camera.getWorldPosition(_v1).clone().addScaledVector(dir,dist).sub(origin).normalize();
 }
-function kick(model, dz=.1, rx=0){ // отдача: корпус + объявленные части
-  model.position.z+=dz; model.rotation.x+=rx;
-  if(model.userData.recoil) for(const p of model.userData.recoil) p.position.z+=dz*.7;
+function kick(model, dz=.1, rx=0){ // отдача: корпус слегка, стволы — сильно, + кик камеры
+  dz*=1.9;                                  // усилить отдачу всех стволов
+  model.position.z+=dz*.5;
+  model.rotation.x+=rx*1.4 - dz*.5;         // ствол вскидывается вверх
+  if(model.userData.recoil) for(const p of model.userData.recoil) p.position.z+=dz*1.25;
+  camKick=Math.max(camKick, dz*7*DEG);      // лёгкий кик камеры пропорционально мощности
 }
+function right0(){ return _v3.setFromMatrixColumn(camera.matrixWorld,0).clone(); }
 function nearestFish(p, maxD, skipFugu=true){
   let best=null, bd=maxD*maxD;
   for(const f of fishes){
@@ -1920,16 +1943,17 @@ const FIRE = {
     fireProj({weapon:'turret', origin:o, dir:convergedDir(o), speed:38, color:0x19f0ff});
     kick(w.model,.07); flashMuzzle(0x19f0ff); SFX.pew(); vibrate(12);
   },
-  laser(){ // спаренные красные болты-чёрточки
-    const w=W.laser;
+  laser(){ // быстрые болты по очереди из четырёх стволов — «молотит как Сокол»
+    const w=W.laser; w.side=((w.side||0)+1)%4;
+    const cx=(w.side<2?-1:1), cy=(w.side%2?1:-1);
     const dir=aimDir();
-    for(const s of [-1,1]){
-      const o=muzzleWorld().clone().addScaledVector(dir,.55)
-        .addScaledVector(_v1.setFromMatrixColumn(camera.matrixWorld,0), s*.05);
-      fireProj({weapon:'laser', origin:o, dir:convergedDir(o,30), speed:55, color:0xff3030,
-        coreColor:0xff6060, glowScale:.28, life:1.6, pierce:1});
-    }
-    kick(w.model,.05); flashMuzzle(0xff3030); SFX.laser(); vibrate(10);
+    const right=_v2.setFromMatrixColumn(camera.matrixWorld,0).clone();
+    const up=_v3.setFromMatrixColumn(camera.matrixWorld,1).clone();
+    const o=muzzleWorld().clone().addScaledVector(dir,.6)
+      .addScaledVector(right,cx*.05).addScaledVector(up,cy*.05+.02);
+    fireProj({weapon:'laser', origin:o, dir:convergedDir(o,30), speed:62, color:0xff3020,
+      coreColor:0xffb070, glowScale:.34, life:1.6, pierce:1});
+    kick(w.model,.13,-.02); flashMuzzle(0xff5020); SFX.laser(); vibrate(12);
   },
   shotgun(){
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
@@ -1953,12 +1977,13 @@ const FIRE = {
       color:0x6aff6a, coreColor:0xb0ffb0, glowScale:.7, life:2.2, aoe:2.4, boomEnd:true});
     kick(W.plasma.model,.12); flashMuzzle(0x6aff6a); SFX.plasma(); vibrate(20);
   },
-  vulcan(){ // ПУЛЕМЁТ: широкий «шланг» жёлтых трассеров, большой разброс
+  vulcan(){ // МИНИГАН: плотный ливень жёлтых трассеров, гильзы, тряска корпуса
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.55);
-    const d=convergedDir(o,25,2).add(_v1.set(rand(-1,1),rand(-1,1),rand(-1,1)).multiplyScalar(.045)).normalize();
-    fireProj({weapon:'vulcan', origin:o, dir:d, speed:44, color:0xfff0a0, glowScale:.24, life:1.4});
-    burst(o, 0xffd060, 1.5, 4, .12, 0, .1); // вылет гильзы-искры
-    kick(W.vulcan.model,.03); flashMuzzle(0xfff0a0); SFX.vulcan(); vibrate(6);
+    const d=convergedDir(o,25,2).add(_v1.set(rand(-1,1),rand(-1,1),rand(-1,1)).multiplyScalar(.02)).normalize();
+    fireProj({weapon:'vulcan', origin:o, dir:d, speed:50, color:0xfff0a0, glowScale:.24, life:1.4});
+    burst(muzzleWorld().clone().addScaledVector(right0(),.12), 0xffd060, 2, 3, .25, 5, .09); // гильза вбок
+    kick(W.vulcan.model,.06,-.015); flashMuzzle(0xfff0a0); SFX.vulcan(); vibrate(7);
+    if(Math.random()<.5) shake(1.6,.05); // непрерывная дрожь миниган­а
   },
   arc(){ // цепная молния: до 3 целей
     const dir=assistDir(aimDir(), 8*DEG, .9);
@@ -2043,6 +2068,14 @@ const FIRE = {
   }
 };
 Object.assign(FIRE,{
+  turbo(){ // один жирный зелёный болт, пробивает 3 цели, очки ×1.5, мощнейшая отдача
+    const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.6);
+    const b=fireProj({weapon:'turbo', origin:o, dir:convergedDir(o,32,1.5), speed:48, color:0x66ff66,
+      coreColor:0xe0ffe0, glowScale:.55, life:1.7, pierce:3, trail:0x66ff66});
+    if(b) b.bonus=1.5;
+    kick(W.turbo.model,.3,-.05); camKick=3*DEG; flashMuzzle(0x66ff66);
+    screenFlash(''); SFX.turbo(); vibrate([30,30,80]); shake(6,.22);
+  },
   piranha(){ // стая из пяти: догоняют, вгрызаются, сдирают по кускам
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.4);
     for(let i=0;i<5;i++){
@@ -2617,7 +2650,7 @@ function updateProjectiles(dt){
       if(d2<r*r){
         if(b.aoe){ explodeAt(b.m.position, b.aoe, b.weapon);
           if(b.frost) freezeNear(b.m.position, b.frost); dead=true; break; }
-        hitFish(f, b.weapon); state.hits++;
+        hitFish(f, b.weapon, b.bonus||1); state.hits++;
         if(b.pierce>0){ b.pierce--; continue; }
         if(b.ricochet>0){
           b.ricochet--;
