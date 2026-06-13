@@ -225,7 +225,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '7.0.2';
+const VERSION = '7.0.3';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -2994,13 +2994,10 @@ $('resumeBtn').addEventListener('click', ()=>{
 
 /* ---------------- камера AR + разрешения ---------------- */
 let camOK=false;
-async function setupAR(){
-  // iOS: разрешение на гироскоп строго в жесте
-  try{
-    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
-      await DeviceOrientationEvent.requestPermission();
-    }
-  }catch(e){}
+async function setupAR(gyroPerm){
+  // iOS: разрешение на гироскоп уже запрошено синхронно в жесте (см. кнопку СТАРТ);
+  // здесь только дожидаемся ответа, чтобы не потерять «жест» из-за await camera
+  try{ if(gyroPerm) await gyroPerm; }catch(e){}
   try{
     const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}, audio:false});
     const v=$('cam'); v.srcObject=stream; v.style.display='block';
@@ -3039,9 +3036,17 @@ buildSkinRow();
 
 /* ---------------- кнопки экранов ---------------- */
 $('startBtn').addEventListener('click', async ()=>{
+  // iOS: requestPermission ОБЯЗАН быть вызван синхронно в жесте — до любого await,
+  // иначе теряется user-activation и гироскоп не включается (вид не следует за телефоном)
+  let gyroPerm=null;
+  try{
+    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+      gyroPerm=DeviceOrientationEvent.requestPermission();
+    }
+  }catch(e){}
   audioInit();
   if(AU.ctx && AU.ctx.state==='suspended') await AU.ctx.resume().catch(()=>{});
-  await setupAR();
+  await setupAR(gyroPerm);
   startRound();
 });
 $('againBtn').addEventListener('click', ()=>{ startRound(); });
