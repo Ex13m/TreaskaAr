@@ -225,7 +225,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '6.2.0';
+const VERSION = '6.3.0';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -1266,8 +1266,6 @@ const W = {
   vulcan: {name:'ВУЛКАН',     ico:'🌀', unlock:8000,  mode:'auto',   cd:.055, color:0xfff0a0, spinup:.45, spin:0},
   arc:    {name:'ТЕСЛА',      ico:'🌩', unlock:9000,  mode:'tap',    cd:.6,   color:0xd0e8ff},
   flak:   {name:'ФЛАК',       ico:'🎆', unlock:11000, mode:'tap',    cd:.6,   color:0xffc266},
-  homing: {name:'РОЙ',        ico:'🚀', unlock:12000, mode:'tap',    cd:.9,   color:0xff8866},
-  disc:   {name:'ДИСК',       ico:'💿', unlock:14000, mode:'tap',    cd:.7,   color:0x7ef2e0},
   freeze: {name:'КРИО-ЛУЧ',   ico:'❄️', unlock:15000, mode:'beam',   cd:0,    color:0xbfeaff, beaming:false, tick:0,
            beamCfg:{color:0xbfeaff,range:13,width:1.5,cone:.992,rate:1,slow:true,snd:'freezeTick',killAs:'freeze'}},
   needler:{name:'ИГЛОМЁТ',    ico:'📌', unlock:16000, mode:'auto',   cd:.18,  color:0xff7bd5},
@@ -1275,8 +1273,6 @@ const W = {
   bfg:    {name:'БФГ-МИНИ',   ico:'☢️', unlock:20000, mode:'charge', cd:0,    color:0x6aff6a, reload:0, reloadMax:1},
   sing:   {name:'СИНГУЛЯРНОСТЬ',ico:'🕳️',unlock:25000,mode:'tap',    cd:1.4,  color:0xb88cff},
   plasmagun:{name:'ПЛАЗМАГАН',  ico:'', unlock:27000, mode:'auto',   cd:.22,  color:0x66ff99},
-  rockets:{name:'РАЗРЫВ',       ico:'', unlock:29000, mode:'tap',    cd:1.0,  color:0xff6644},
-  shuriken:{name:'СЮРИКЕНЫ',    ico:'', unlock:31000, mode:'tap',    cd:.6,   color:0xb8f8ff},
   harpoon:{name:'ГАРПУН',       ico:'', unlock:33000, mode:'tap',    cd:.7,   color:0xcfe6ff},
   mines:  {name:'МИНЫ',         ico:'', unlock:35000, mode:'tap',    cd:.9,   color:0xcc88ff},
   boomerang:{name:'СЕРП',       ico:'', unlock:38000, mode:'tap',    cd:.8,   color:0xffd166},
@@ -1639,7 +1635,7 @@ Object.assign(BUILD,{
 const GLB_GUNS={
   crossbow:'Crossbow_1', // уникальный силуэт арбалета
   rail:    'Sniper_1',   // длинный ствол снайперки под рельсотрон
-  rockets: 'Grenade_2',  // гранатомёт
+  swarm:   'Grenade_2',  // ракетная установка
   plasmagun:'SMG_1',     // компактный SMG
   acid:    'Pistol_3'    // пистолет
 };
@@ -2162,11 +2158,11 @@ Object.assign(FIRE,{
       coreColor:0xe8fbff, orbScale:.11, glowScale:.55, life:1.6, grav:6, aoe:1.8, frost:4.2, boomEnd:true});
     kick(W.frost.model,.1,-.18); SFX.frost(); vibrate(16);
   },
-  pinball(){ // шар-рикошет: до 6 перескоков
+  pinball(){ // шар-рикошет: до 9 перескоков, молотит всю стаю
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
-    fireProj({weapon:'pinball', skin:'orb', origin:o, dir:convergedDir(o,20), speed:40,
-      color:0xf2f8ff, coreColor:0xffffff, orbScale:.07, glowScale:.45, life:2.4, ricochet:6});
-    kick(W.pinball.model,.09); flashMuzzle(0xf2f8ff); SFX.pinball(); vibrate(14);
+    fireProj({weapon:'pinball', skin:'orb', origin:o, dir:convergedDir(o,20), speed:46,
+      color:0xf2f8ff, coreColor:0xffffff, orbScale:.08, glowScale:.5, life:2.8, ricochet:9, trail:0xbfe8ff});
+    kick(W.pinball.model,.1); flashMuzzle(0xf2f8ff); SFX.pinball(); vibrate(14);
   },
   gatlas(){ // ЛАЗ-ГАТЛИНГ: точные красные лучи, пробивают насквозь
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
@@ -2175,15 +2171,16 @@ Object.assign(FIRE,{
       coreColor:0xff9090, glowScale:.18, life:1.1, pierce:2});
     kick(W.gatlas.model,.02); flashMuzzle(0xff5050); SFX.gatlas(); vibrate(5);
   },
-  swarm(){ // шесть мини-ракет с агрессивным самонаведением
+  swarm(){ // ЕДИНСТВЕННЫЙ ракетный: 8 разрывных самонаводящихся ракет веером
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.45);
-    for(let i=0;i<6;i++){
-      const a=i*1.047;
-      const d=convergedDir(o,16,2).add(_v1.set(Math.cos(a)*.35, .2+Math.sin(a)*.2, 0)).normalize();
-      fireProj({weapon:'swarm', origin:o, dir:d, speed:14, color:0xffaa33,
-        glowScale:.22, life:2.8, homing:8, aoe:.8, trail:0xffd9a0});
+    for(let i=0;i<8;i++){
+      const a=i*.785;
+      const d=convergedDir(o,16,2).add(_v1.set(Math.cos(a)*.4, .22+Math.sin(a)*.22, 0)).normalize();
+      fireProj({weapon:'swarm', origin:o, dir:d, speed:13+i, color:0xffaa33,
+        glowScale:.26, life:3, homing:9, aoe:1.1, trail:0xffd9a0});
     }
-    kick(W.swarm.model,.14,-.1); flashMuzzle(0xffaa33); SFX.swarm(); vibrate([10,15,10,15,10]); shake(2,.08);
+    kick(W.swarm.model,.18,-.12); camKick=1.2*DEG; flashMuzzle(0xffaa33);
+    SFX.swarm(); vibrate([12,18,12,18,12]); shake(3,.1);
   },
   tornado(){ // вихрь: тащит рыб за собой и лопается
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.5);
@@ -2654,9 +2651,10 @@ function updateProjectiles(dt){
         if(b.pierce>0){ b.pierce--; continue; }
         if(b.ricochet>0){
           b.ricochet--;
-          const nt=nearestFish(b.m.position, 14);
+          const nt=nearestFish(b.m.position, 16);
           if(nt){ b.vel.copy(nt.pos).sub(b.m.position).normalize().multiplyScalar(b.speed0);
-            SFX.disc(); break; }
+            burst(b.m.position, 0xf2f8ff, 2, 8, .25, 0, .09); // вспышка-«пинг» на отскоке
+            shockRing(b.m.position, 0xbfe8ff); SFX.pinball(); break; }
         }
         dead=true; break;
       }
