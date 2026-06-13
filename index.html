@@ -225,7 +225,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '7.0.0';
+const VERSION = '7.0.2';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -314,22 +314,8 @@ const plankton = (()=>{
   const p=new THREE.Points(g,m); p.visible=false; scene.add(p); return p;
 })();
 
-/* ---------------- среда: лучи, пузырьки, фолбэк-мир ---------------- */
+/* ---------------- среда: пузырьки, фолбэк-мир ---------------- */
 const envFallback=new THREE.Group(); envFallback.visible=false; scene.add(envFallback);
-// «божественные лучи» — еле заметные столбы света, видны всегда
-const raysG=new THREE.Group();
-{
-  const rayMat=new THREE.MeshBasicMaterial({color:0x9fdfff,transparent:true,opacity:.045,
-    blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
-  for(let i=0;i<4;i++){
-    const a=i*1.7+.5;
-    const r=new THREE.Mesh(new THREE.PlaneGeometry(2.4,26), rayMat);
-    r.position.set(Math.cos(a)*8, 7, Math.sin(a)*8);
-    r.rotation.set(.12, a, .15);
-    raysG.add(r);
-  }
-  scene.add(raysG);
-}
 // пузырьки-планктон в воздухе — всегда, объём миру даже поверх камеры
 const bubbles=(()=>{
   const N=140, pos=new Float32Array(N*3);
@@ -3155,7 +3141,6 @@ function loop(t){
     if(bubbles.pos[i*3+1]>9) bubbles.pos[i*3+1]=-4;
   }
   bubbles.att.needsUpdate=true;
-  raysG.rotation.y+=sdt*.01;
   if(seaU && envFallback.visible) seaU.value=now;
   if(!state.paused){
   updateWhale(sdt);
