@@ -107,6 +107,18 @@
     font-weight:900;font-size:15px;letter-spacing:.1em;color:var(--gold);opacity:0;pointer-events:none;
     text-align:center;transition:all .25s;text-shadow:0 0 18px var(--gold)}
   #toast.show{opacity:1;transform:translateX(-50%) scale(1)}
+  #fishName{position:fixed;left:50%;bottom:max(96px,calc(env(safe-area-inset-bottom) + 86px));z-index:8;
+    transform:translateX(-50%) translateY(22px);padding:7px 18px;border-radius:14px;pointer-events:none;
+    opacity:0;white-space:nowrap;font-weight:900;font-size:15px;letter-spacing:.07em;color:#eaffff;
+    background:rgba(8,20,36,.45);border:1px solid var(--line);backdrop-filter:blur(6px);
+    text-shadow:0 0 14px rgba(25,240,255,.7)}
+  #fishName.show{animation:fishname 1.5s ease-out forwards}
+  @keyframes fishname{
+    0%{opacity:0;transform:translateX(-50%) translateY(22px) scale(.92)}
+    14%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+    55%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+    100%{opacity:0;transform:translateX(-50%) translateY(-80px) scale(1.06)}
+  }
 
   /* ---------- screens ---------- */
   .screen{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -170,6 +182,7 @@
   <div id="chips"></div>
 </div>
 <div id="toast"></div>
+<div id="fishName"></div>
 <div id="pauseOv" class="screen off" style="z-index:9;background:rgba(5,13,26,.82)">
   <h1 style="font-size:30px">ПАУЗА</h1>
   <button id="resumeBtn" class="bigbtn">▶ ПРОДОЛЖИТЬ</button>
@@ -225,7 +238,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '7.1.0';
+const VERSION = '7.2.0';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -360,6 +373,10 @@ addEventListener('deviceorientation', e=>{
 const _z=new THREE.Vector3(0,0,1), _e=new THREE.Euler(), _q0=new THREE.Quaternion(),
       _q1=new THREE.Quaternion(-Math.SQRT1_2,0,0,Math.SQRT1_2), _qy=new THREE.Quaternion(),
       UP=new THREE.Vector3(0,1,0);
+const _qPrevRaw=new THREE.Quaternion(), _qDelta=new THREE.Quaternion(),
+      _qInv=new THREE.Quaternion(), _qPred=new THREE.Quaternion();
+let camHavePrev=false;
+const PREDICT=0.35; // доля кадра вперёд: компенсирует задержку сенсор→экран
 function gyroQuat(q){
   const o = ((screen.orientation && screen.orientation.angle) || window.orientation || 0)*DEG;
   _e.set(gyro.beta*DEG, gyro.alpha*DEG, -gyro.gamma*DEG, 'YXZ');
@@ -371,9 +388,22 @@ function updateCamera(){
   if(gyro.has){
     gyroQuat(camera.quaternion);
     camera.quaternion.premultiply(_qy.setFromAxisAngle(UP, look.dragYaw));
+    // лёгкое предсказание: экстраполируем поворот на долю кадра, мир «прилипает»
+    // при свинге и рыба не уплывает вслед за прицелом из-за задержки сенсора
+    if(camHavePrev){
+      _qInv.copy(_qPrevRaw).invert();
+      _qDelta.copy(camera.quaternion).multiply(_qInv);          // поворот за кадр
+      _qPrevRaw.copy(camera.quaternion);
+      const ang=2*Math.acos(Math.min(1,Math.abs(_qDelta.w)));   // его величина
+      if(ang>0.0002 && ang<0.25){                               // только плавное движение (до ~14°/кадр)
+        _qPred.identity().slerp(_qDelta, PREDICT);
+        camera.quaternion.premultiply(_qPred);
+      }
+    }else{ _qPrevRaw.copy(camera.quaternion); camHavePrev=true; }
   }else{
     _e.set(look.pitch, look.yaw, 0, 'YXZ');
     camera.quaternion.setFromEuler(_e);
+    camHavePrev=false;
   }
   if(camKick>0.0001) camera.rotateX(camKick);
 }
@@ -852,20 +882,23 @@ function fuguParts(){
   for(const s of [-1,1]) P.push({geo:GEO.sphere, scl:[.07,.07,.07], pos:[s*.2,.12,.36], color:0x0a0a12});
   return P;
 }
-function barracudaParts(c){ // длинная стремительная хищница с острой мордой
+function barracudaParts(c){ // очень длинное тело + ОТКРЫТАЯ ПАСТЬ — узнаваемая барракуда
   const P=[
-    {geo:GEO.sphereHi, scl:[.16,.18,.8], grad:c.grad},                 // длинное тело
-    {geo:GEO.sphere, scl:[.13,.14,.62], pos:[0,-.05,0], color:c.belly},// светлое брюхо
-    {geo:GEO.cone, scl:[.1,.2,.1], rot:[Math.PI/2,0,0], pos:[0,0,.74], color:c.fin}, // острая морда
-    {geo:GEO.cone, scl:[.05,.26,.22], rot:[Math.PI/2,0,.5],  pos:[0,.05,-.86], color:c.fin}, // хвост-вилка
-    {geo:GEO.cone, scl:[.05,.26,.22], rot:[Math.PI/2,0,-.5], pos:[0,-.05,-.86], color:c.fin},
-    {geo:GEO.cone, scl:[.03,.16,.12], rot:[-.2,0,0], pos:[0,.18,.06], color:c.fin}, // спинной 1
-    {geo:GEO.cone, scl:[.025,.13,.1], rot:[-.2,0,0], pos:[0,.16,-.34], color:c.fin} // спинной 2
+    {geo:GEO.sphereHi, scl:[.13,.15,.95], grad:c.grad},                // вытянутое тело
+    {geo:GEO.sphere, scl:[.1,.11,.72], pos:[0,-.04,0], color:c.belly}, // брюхо
+    // голова с разинутой пастью: верхняя и нижняя челюсти + тёмная глотка в зазоре
+    {geo:GEO.cone, scl:[.06,.24,.06], rot:[Math.PI/2,0,0], pos:[0,.05,.9],  color:c.fin},   // верхняя челюсть
+    {geo:GEO.cone, scl:[.06,.21,.06], rot:[Math.PI/2,0,0], pos:[0,-.07,.85], color:c.fin},  // нижняя челюсть
+    {geo:GEO.sphere, scl:[.05,.05,.09], pos:[0,-.01,.78], color:0x140a0c},                  // тёмная пасть
+    {geo:GEO.cone, scl:[.05,.28,.24], rot:[Math.PI/2,0,.5],  pos:[0,.05,-1], color:c.fin},  // хвост-вилка
+    {geo:GEO.cone, scl:[.05,.28,.24], rot:[Math.PI/2,0,-.5], pos:[0,-.05,-1], color:c.fin},
+    {geo:GEO.cone, scl:[.02,.17,.1], rot:[-.2,0,0], pos:[0,.16,0], color:c.fin},   // спинной 1
+    {geo:GEO.cone, scl:[.02,.13,.08], rot:[-.2,0,0], pos:[0,.14,-.42], color:c.fin}// спинной 2
   ];
   for(const sd of [-1,1]){
-    P.push({geo:GEO.cone, scl:[.025,.13,.08], rot:[0,0,sd*1.2], pos:[sd*.13,-.04,.18], color:c.fin}); // грудные
-    P.push({geo:GEO.sphere, scl:[.045,.045,.045], pos:[sd*.1,.07,.52], color:0xdfeef2}); // белок
-    P.push({geo:GEO.sphere, scl:[.026,.026,.026], pos:[sd*.11,.07,.55], color:0x06080c}); // зрачок
+    P.push({geo:GEO.cone, scl:[.02,.12,.07], rot:[0,0,sd*1.2], pos:[sd*.11,-.03,.12], color:c.fin}); // грудные
+    P.push({geo:GEO.sphere, scl:[.04,.04,.04], pos:[sd*.085,.06,.6], color:0xdfeef2});  // белок
+    P.push({geo:GEO.sphere, scl:[.024,.024,.024], pos:[sd*.095,.06,.63], color:0x06080c}); // зрачок
   }
   return P;
 }
@@ -957,6 +990,18 @@ for(let i=0;i<SPECIES.golden.max;i++){
 }
 
 const fishes=[];
+const FISH_LABEL={cod:'🐟 ТРЕСКА', saithe:'🐟 САЙДА', fry:'🐠 СТАЯ МАЛЬКОВ',
+  golden:'✨ ЗОЛОТАЯ ТРЕСКА', fugu:'💣 ФУГУ — НЕ СТРЕЛЯЙ', barracuda:'🗡 БАРРАКУДА', trout:'🐟 ФОРЕЛЬ'};
+const _annCD={};
+function announceFish(type){ // на секунду показать имя вида внизу, потом улетает вверх и тает
+  const lbl=FISH_LABEL[type]; if(!lbl) return;
+  const tnow=performance.now();
+  if(_annCD[type] && tnow-_annCD[type]<6000) return; // не спамить одним видом
+  _annCD[type]=tnow;
+  const el=$('fishName'); if(!el) return;
+  el.textContent=lbl;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); // перезапуск анимации
+}
 function pickAnchor(){
   const a=rand(0,TAU), d=rand(4,14);
   return new THREE.Vector3(Math.cos(a)*d, rand(-2,5), Math.sin(a)*d);
@@ -973,14 +1018,15 @@ function spawnFish(type, schoolId=null, near=null){
   f.anchor.copy(near||pickAnchor());
   f.pos.copy(f.anchor).add(_v1.set(rand(-1,1),rand(-.5,.5),rand(-1,1)));
   f.target.copy(pickAnchor());
-  if(type==='barracuda'){ f.dashT=rand(0,1); f.dash=0; f.dashMul=2; }
-  if(type==='trout'){ f.circR=rand(2,4); f.phase0=rand(0,TAU); f.jump=0; f.jumpT=rand(1,4); f.jumpDur=0; f.jumpH=0; }
+  if(type==='barracuda'){ f.dashT=rand(0,.8); f.dash=0; f.dashDir=new THREE.Vector3(0,0,1); f.burst=0; }
+  if(type==='trout'){ f.circR=rand(2.2,4); f.phase0=rand(0,TAU); f.jump=0; f.jumpT=rand(.6,2.5); f.jumpDur=0; f.jumpH=0; }
   if(type==='golden'){
     f.halo=halos.find(h=>!h.visible)||null;
     if(f.halo){ f.halo.visible=true; f.halo.position.copy(f.pos); }
     SFX.fanfare(f.pos); toast('✨ ЗОЛОТАЯ ТРЕСКА!', 1200);
   }
   fishes.push(f);
+  if(type!=='cod') announceFish(type); // объявить вид (треску не спамим — она базовая)
   return f;
 }
 let schoolSeq = 0;
@@ -1016,17 +1062,19 @@ function updateFish(dt){
     if(f.type==='saithe'){ // восьмёрки вокруг якоря
       const s=f.t*f.speed*.45;
       f.target.set(f.anchor.x+Math.sin(s)*3, f.anchor.y+Math.sin(s*2)*1.2, f.anchor.z+Math.sin(s*2)*2.2);
-    }else if(f.type==='barracuda'){ // рандомные рывки с резкой сменой направления
+    }else if(f.type==='barracuda'){ // импульсные рывки в НЕПОНЯТНО какую сторону
+      if(f.dash>0) f.dash-=dt;
       f.dashT-=dt;
-      if(f.dashT<=0){
-        f.target.set(f.anchor.x+rand(-7,7), clamp(f.anchor.y+rand(-3,3),-2,6), f.anchor.z+rand(-7,7));
-        f.dashT=rand(.5,1.6); f.dash=rand(.25,.5); f.dashMul=rand(1.8,3);
-        f.anchor.x+=rand(-2,2); f.anchor.z+=rand(-2,2);
+      if(f.dashT<=0 && f.dash<=0){
+        const a=rand(0,TAU), el=rand(-.55,.7);
+        f.dashDir.set(Math.cos(a)*Math.cos(el), Math.sin(el), Math.sin(a)*Math.cos(el));
+        if(p.length()>13) f.dashDir.lerp(_v2.copy(p).multiplyScalar(-1).normalize(), .6).normalize(); // не улетать
+        f.dash=rand(.35,.7); f.dashT=f.dash+rand(.5,1.4); f.burst=rand(8,13);
       }
-    }else if(f.type==='trout'){ // круг + случайные прыжки-скачки
-      const cs=f.t*f.speed*.5+f.phase0;
+    }else if(f.type==='trout'){ // круг + ЧАСТЫЕ выраженные прыжки-скачки
+      const cs=f.t*f.speed*.7+f.phase0;
       f.jumpT-=dt;
-      if(f.jumpT<=0 && f.jump<=0){ f.jumpDur=rand(.45,.85); f.jump=f.jumpDur; f.jumpH=rand(1.6,3.2); f.jumpT=rand(2,5)+f.jumpDur; }
+      if(f.jumpT<=0 && f.jump<=0){ f.jumpDur=rand(.5,.8); f.jump=f.jumpDur; f.jumpH=rand(2.2,4); f.jumpT=rand(1.2,3)+f.jumpDur; }
       let jy=0; if(f.jump>0){ f.jump-=dt; jy=f.jumpH*Math.sin((1-f.jump/f.jumpDur)*Math.PI); }
       f.target.set(f.anchor.x+Math.cos(cs)*f.circR, f.anchor.y+jy, f.anchor.z+Math.sin(cs)*f.circR);
     }else if(f.school){ // boids: к якорю + разделение + выравнивание
@@ -1043,13 +1091,16 @@ function updateFish(dt){
     }else if(p.distanceToSquared(f.target)<1.5){
       f.target.copy(pickAnchor());
     }
-    // steering к цели; барракуда — рывки и резкие повороты, форель — щелчок прыжка
-    let spd=f.speed, turnK=f.fear>0?6:1.4;
+    // steering к цели; барракуда — импульс рывка и резкое торможение
     if(f.type==='barracuda'){
-      if(f.dash>0){ f.dash-=dt; spd*=f.dashMul; turnK=9; } else { spd*=.55; turnK=3; }
-    }else if(f.type==='trout' && f.jump>0){ spd*=1.7; turnK=5; }
-    _v1.copy(f.target).sub(p).normalize().multiplyScalar(spd);
-    f.vel.lerp(_v1, clamp(dt*turnK,0,1));
+      if(f.dash>0){ _v1.copy(f.dashDir).multiplyScalar(f.burst); f.vel.lerp(_v1, clamp(dt*16,0,1)); } // мгновенный рывок
+      else f.vel.multiplyScalar(Math.max(0, 1-dt*5)); // резкое торможение почти до стопа
+    }else{
+      let spd=f.speed, turnK=f.fear>0?6:1.4;
+      if(f.type==='trout' && f.jump>0){ spd*=1.9; turnK=6; } // щелчок прыжка
+      _v1.copy(f.target).sub(p).normalize().multiplyScalar(spd);
+      f.vel.lerp(_v1, clamp(dt*turnK,0,1));
+    }
     if(f.fear>0) f.fear-=dt;
     if(f.cold>0) f.cold-=dt; else if(f.freezeAcc>0) f.freezeAcc=Math.max(0,f.freezeAcc-dt*.7);
     p.addScaledVector(f.vel, dt*(f.cold>0?.3:1)); // в крио-луче рыба вязнет
@@ -1078,13 +1129,14 @@ function updateFish(dt){
   fishSys.golden.mat.emissive.setRGB(.4+.3*gk, .25+.2*gk, 0);
   fishSys.fugu.mat.emissive.setRGB((.5+.5*Math.sin(now*8))>.6?.8:0, 0, 0);
 }
-function alertBarracudas(){ // звук стрельбы → резкий рывок в случайную сторону
+function alertBarracudas(){ // звук стрельбы → мгновенный импульс в случайную сторону
   for(const f of fishes){
     if(f.type!=='barracuda') continue;
-    if(f.dash<=0 || Math.random()<.5){
-      f.dash=rand(.3,.6); f.dashMul=rand(2.6,3.8); f.dashT=f.dash+rand(.1,.4);
-      f.target.set(f.pos.x+rand(-6,6), clamp(f.pos.y+rand(-2,3),-2,6), f.pos.z+rand(-6,6));
-    }
+    if(f.dash>0 && Math.random()<.5) continue;
+    const a=rand(0,TAU), el=rand(-.5,.7);
+    f.dashDir.set(Math.cos(a)*Math.cos(el), Math.sin(el), Math.sin(a)*Math.cos(el));
+    if(f.pos.length()>13) f.dashDir.lerp(_v2.copy(f.pos).multiplyScalar(-1).normalize(), .6).normalize();
+    f.dash=rand(.3,.55); f.dashT=f.dash+rand(.3,.9); f.burst=rand(10,15); // паника — ещё резче
   }
 }
 function scareNear(point, r){
