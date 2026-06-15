@@ -238,7 +238,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '7.2.2';
+const VERSION = '7.2.3';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -1309,21 +1309,26 @@ function screenFlash(cls){
 }
 /* всплывающие цифры */
 const pops=[];
-for(let i=0;i<14;i++){
+for(let i=0;i<48;i++){ // большой пул — надписи успевают при серии убийств подряд
   const d=document.createElement('div'); d.className='popnum'; $('fxLayer').appendChild(d);
   pops.push(d);
 }
 let popIdx=0;
 function popNumber(worldPos, text, cls=''){
   const p=_v1.copy(worldPos).project(camera);
-  if(p.z>1 || Math.abs(p.x)>1.1 || Math.abs(p.y)>1.1) return;
+  if(p.z>1) return; // позади камеры — показать негде
+  // за краем экрана — прижать к краю, чтобы надпись всё равно появилась
+  const sx=clamp((p.x*.5+.5)*innerWidth, 30, innerWidth-30);
+  const sy=clamp((-p.y*.5+.5)*innerHeight, 70, innerHeight-120);
   const d=pops[popIdx++%pops.length];
+  d.classList.remove('show');
   d.className='popnum '+cls;
   d.textContent=text;
-  d.style.left=((p.x*.5+.5)*innerWidth)+'px';
-  d.style.top=((-p.y*.5+.5)*innerHeight)+'px';
+  d.style.left=sx+'px';
+  d.style.top=sy+'px';
   d.style.transform='translate(-50%,-50%)';
   d.style.opacity=1;
+  void d.offsetWidth; // форс-рефлоу: анимация перезапускается даже при быстром переиспользовании
   requestAnimationFrame(()=>{
     d.classList.add('show');
     d.style.transform='translate(-50%,-160%) scale('+(cls.includes('gold')?1.25:1)+')';
