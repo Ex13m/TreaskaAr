@@ -238,7 +238,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '7.2.1';
+const VERSION = '7.2.2';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -809,7 +809,7 @@ const _v1=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3();
 /* запекание набора примитивов в одну геометрию с цветом по вершинам */
 const _bm=new THREE.Matrix4(), _be=new THREE.Euler(), _bq=new THREE.Quaternion(),
       _bp=new THREE.Vector3(), _bs=new THREE.Vector3(), _bc=new THREE.Color();
-const _ct=new THREE.Color(), _cb=new THREE.Color(), _cs=new THREE.Color(), _cv=new THREE.Color();
+const _ct=new THREE.Color(), _cb=new THREE.Color(), _cs=new THREE.Color(), _cv=new THREE.Color(), _cstr=new THREE.Color();
 function bakeParts(parts, post){
   const chunks=[];
   for(const pt of parts){
@@ -823,6 +823,7 @@ function bakeParts(parts, post){
     if(pt.grad){
       /* процедурная «шкура»: градиент спина→брюхо, крап, боковая линия */
       _ct.set(pt.grad.top); _cb.set(pt.grad.bot); _cs.set(pt.grad.speck||0x000000);
+      const stripe=pt.grad.stripe; if(stripe) _cstr.set(stripe.col);
       for(let i=0;i<n;i++){
         const ux=unit[i*3], uy=unit[i*3+1], uz=unit[i*3+2];
         _cv.copy(_ct).lerp(_cb, clamp(.5-uy*.62,0,1));
@@ -830,7 +831,8 @@ function bakeParts(parts, post){
           const h=Math.sin(ux*127.1+uy*311.7+uz*74.7)*43758.5453, fr=h-Math.floor(h);
           if(fr>1-(pt.grad.density||.16)) _cv.lerp(_cs,.65);
         }
-        if(Math.abs(uy-.06)<.05) _cv.multiplyScalar(.82); // боковая линия
+        if(stripe){ const dd=Math.abs(uy-stripe.y); if(dd<stripe.w) _cv.lerp(_cstr, stripe.mix*(1-dd/stripe.w)); } // цветная полоса (форель)
+        else if(Math.abs(uy-.06)<.05) _cv.multiplyScalar(.82); // боковая линия
         col[i*3]=_cv.r; col[i*3+1]=_cv.g; col[i*3+2]=_cv.b;
       }
     }else{
@@ -902,19 +904,19 @@ function barracudaParts(c){ // очень длинное тело + ОТКРЫТ
   }
   return P;
 }
-function troutParts(c){ // форель: глубокое тело, спинной + жировой плавник, крап
+function troutParts(c){ // форель: торпеда, розовая боковая полоса, крап, жировой плавник
   const P=[
-    {geo:GEO.sphereHi, scl:[.2,.28,.6], grad:c.grad},
-    {geo:GEO.sphere, scl:[.17,.2,.5], pos:[0,-.07,0], color:c.belly},
-    {geo:GEO.cone, scl:[.05,.28,.26], rot:[Math.PI/2,0,.5],  pos:[0,.05,-.72], color:c.fin}, // хвост-вилка
-    {geo:GEO.cone, scl:[.05,.28,.26], rot:[Math.PI/2,0,-.5], pos:[0,-.05,-.72], color:c.fin},
-    {geo:GEO.cone, scl:[.035,.18,.16], rot:[-.2,0,0], pos:[0,.27,.06], color:c.fin}, // спинной
-    {geo:GEO.cone, scl:[.02,.06,.05], rot:[-.2,0,0], pos:[0,.22,-.4], color:c.fin}    // жировой плавник
+    {geo:GEO.sphereHi, scl:[.17,.23,.72], grad:c.grad},
+    {geo:GEO.sphere, scl:[.14,.17,.58], pos:[0,-.06,0], color:c.belly},
+    {geo:GEO.cone, scl:[.05,.3,.26], rot:[Math.PI/2,0,.5],  pos:[0,.05,-.84], color:c.fin}, // хвост-вилка
+    {geo:GEO.cone, scl:[.05,.3,.26], rot:[Math.PI/2,0,-.5], pos:[0,-.05,-.84], color:c.fin},
+    {geo:GEO.cone, scl:[.03,.17,.17], rot:[-.2,0,0], pos:[0,.23,.05], color:c.fin},  // спинной
+    {geo:GEO.cone, scl:[.016,.05,.05], rot:[-.2,0,0], pos:[0,.19,-.44], color:c.fin} // жировой плавник
   ];
   for(const sd of [-1,1]){
-    P.push({geo:GEO.cone, scl:[.03,.15,.1], rot:[0,0,sd*1.2], pos:[sd*.2,-.06,.22], color:c.fin}); // грудные
-    P.push({geo:GEO.sphere, scl:[.05,.05,.05], pos:[sd*.13,.07,.45], color:0xdfeef2});
-    P.push({geo:GEO.sphere, scl:[.028,.028,.028], pos:[sd*.14,.07,.48], color:0x06080c});
+    P.push({geo:GEO.cone, scl:[.028,.15,.1], rot:[0,0,sd*1.2], pos:[sd*.17,-.05,.18], color:c.fin}); // грудные
+    P.push({geo:GEO.sphere, scl:[.045,.045,.045], pos:[sd*.12,.06,.52], color:0xdfeef2});
+    P.push({geo:GEO.sphere, scl:[.026,.026,.026], pos:[sd*.13,.06,.55], color:0x06080c});
   }
   return P;
 }
@@ -948,10 +950,10 @@ function fishMaterial(sp, emissive, rim){
 }
 const PALETTE={
   cod:   {grad:{top:0x4f6234, bot:0xb9c49a, speck:0x33401f, density:.2}, fin:0x55663f, belly:0xe8eadc},
-  saithe:{grad:{top:0x1d2b34, bot:0x7a8c96, speck:0x101a20, density:.1}, fin:0x1f2d36, belly:0x44545e},
+  saithe:{grad:{top:0x1d2b34, bot:0x7a8c96, speck:0x0c151a, density:.22}, fin:0x1f2d36, belly:0x44545e},
   golden:{grad:{top:0xe0a818, bot:0xffeec0, speck:0xfff6d8, density:.22}, fin:0xb8860b, belly:0xffe9b0},
   barracuda:{grad:{top:0x2b3a44, bot:0xd8e2e8, speck:0x16222a, density:.08}, fin:0x3a4a54, belly:0xeef4f6},
-  trout:{grad:{top:0x4a5a2e, bot:0xd9b0a0, speck:0x1c1c12, density:.36}, fin:0x6a5a3a, belly:0xe8d4c8}
+  trout:{grad:{top:0x3f5a26, bot:0xc6cbb4, speck:0x141410, density:.44, stripe:{col:0xd24a66, y:0.02, w:0.22, mix:0.82}}, fin:0x5a6a3a, belly:0xe6e2d2}
 };
 const fishSys={}, _zeroM=new THREE.Matrix4().makeScale(0,0,0), _post=new THREE.Matrix4();
 (function initFishSystem(){
@@ -959,8 +961,8 @@ const fishSys={}, _zeroM=new THREE.Matrix4().makeScale(0,0,0), _post=new THREE.M
     cod:    bakeParts(codParts(PALETTE.cod)),
     saithe: bakeParts(codParts(PALETTE.saithe), _post.makeScale(.85,.8,1.1)),
     golden: bakeParts(codParts(PALETTE.golden), _post.makeScale(1.8,1.8,1.8)),
-    fry:    bakeParts([{geo:GEO.sphere, scl:[.06,.08,.17], grad:{top:0x7da8b8, bot:0xe6f2f6}},
-                       {geo:GEO.cone, scl:[.02,.1,.07], rot:[Math.PI/2,0,0], pos:[0,0,-.2], color:0x8ab4c2}]),
+    fry:    bakeParts([{geo:GEO.sphere, scl:[.06,.08,.17], grad:{top:0x5a7d8a, bot:0xd6eaf0, speck:0x223038, density:.3}},
+                       {geo:GEO.cone, scl:[.02,.1,.07], rot:[Math.PI/2,0,0], pos:[0,0,-.2], color:0x7aa0ad}]),
     fugu:   bakeParts(fuguParts()),
     barracuda: bakeParts(barracudaParts(PALETTE.barracuda)),
     trout:     bakeParts(troutParts(PALETTE.trout))
