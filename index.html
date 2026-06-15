@@ -238,7 +238,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '7.2.0';
+const VERSION = '7.2.1';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -3218,7 +3218,23 @@ document.addEventListener('visibilitychange', ()=>{
 
 /* ---------------- PWA ---------------- */
 if('serviceWorker' in navigator){
-  addEventListener('load', ()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+  addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      // новый SW найден → как только установился, сразу активируем
+      reg.addEventListener('updatefound', ()=>{
+        const nw=reg.installing;
+        nw && nw.addEventListener('statechange', ()=>{
+          if(nw.state==='installed' && navigator.serviceWorker.controller) nw.postMessage('skipWaiting');
+        });
+      });
+      // периодически проверять обновление (на случай долгой сессии)
+      setInterval(()=>reg.update().catch(()=>{}), 60000);
+    }).catch(()=>{});
+    let reloaded=false;
+    navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+      if(reloaded) return; reloaded=true; location.reload(); // подхватить свежую версию
+    });
+  });
 }
 if(!navigator.onLine) $('offlineNote').style.display='block';
 

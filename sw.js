@@ -1,5 +1,7 @@
-/* Подстрели треску — service worker: офлайн-кэш ядра + рантайм-кэш */
-const CACHE = 'treska-v17';
+/* Подстрели треску — service worker.
+   HTML/навигация — network-first (всегда свежая версия при онлайне),
+   остальные ассеты — cache-first (быстро + офлайн). */
+const CACHE = 'treska-v18';
 const CORE = [
   './',
   './index.html',
@@ -25,19 +27,44 @@ self.addEventListener('activate', e => {
   );
 });
 
+// позволяет странице форсировать обновление SW
+self.addEventListener('message', e => { if (e.data === 'skipWaiting') self.skipWaiting(); });
+
+function isHTML(req) {
+  return req.mode === 'navigate' ||
+         (req.destination === 'document') ||
+         /\.html(\?|$)/.test(req.url);
+}
+
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(hit => hit ||
-      fetch(e.request).then(res => {
-        if (res && (res.ok || res.type === 'opaque')) {
+  const req = e.request;
+  if (req.method !== 'GET') return;
+
+  // HTML — network-first: новая версия игры подхватывается сразу при онлайне
+  if (isHTML(req)) {
+    e.respondWith(
+      fetch(req).then(res => {
+        if (res && res.ok) {
           const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+          caches.open(CACHE).then(c => c.put('./index.html', copy)).catch(() => {});
         }
         return res;
-      }).catch(() => {
-        if (e.request.mode === 'navigate') return caches.match('./index.html');
-      })
+      }).catch(() => caches.match('./index.html', { ignoreSearch: true })
+                 .then(hit => hit || caches.match('./')))
+    );
+    return;
+  }
+
+  // остальное (Three.js, модели, звуки, иконки) — cache-first
+  e.respondWith(
+    caches.match(req, { ignoreSearch: true }).then(hit => hit ||
+      fetch(req).then(res => {
+        if (res && (res.ok || res.type === 'opaque')) {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+        }
+        return res;
+      }).catch(() => undefined)
     )
   );
 });
