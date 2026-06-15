@@ -238,7 +238,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '7.3.1';
+const VERSION = '7.3.2';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -1410,7 +1410,7 @@ const W = {
   mines:  {name:'МИНЫ',         ico:'', unlock:35000, mode:'tap',    cd:.9,   color:0xcc88ff},
   boomerang:{name:'СЕРП',       ico:'', unlock:38000, mode:'tap',    cd:.8,   color:0xffd166},
   flame:  {name:'ОГНЕМЁТ',      ico:'', unlock:44000, mode:'beam',   cd:0,    color:0xff7733, beaming:false, tick:0,
-           beamCfg:{color:0xff7733,range:12,width:2.6,cone:.95,rate:4.5,slow:false,snd:'flameTick',killAs:'flame'}},
+           beamCfg:{color:0xff7733,range:12,width:2.6,cone:.95,rate:4.5,slow:false,fire:true,snd:'flameTick',killAs:'flame'}},
   frost:  {name:'КРИО-БОМБА',   ico:'', unlock:47000, mode:'tap',    cd:.9,   color:0x9fe8ff},
   pinball:{name:'ПИНБОЛ',       ico:'', unlock:50000, mode:'tap',    cd:.65,  color:0xf2f8ff},
   swarm:  {name:'ОСИНЫЙ РОЙ',   ico:'', unlock:58000, mode:'tap',    cd:1.2,  color:0xffaa33},
@@ -2052,6 +2052,7 @@ function beamLine(a,bp,color,w=.05,life=.15){
 const cryoCone=new THREE.Mesh(GEO.cone, new THREE.MeshBasicMaterial({color:0xbfeaff,transparent:true,
   opacity:.15,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
 cryoCone.visible=false; scene.add(cryoCone);
+const _flCol=new THREE.Color(), _flCol2=new THREE.Color(), _flV=new THREE.Vector3();
 
 function muzzleWorld(){
   weaponRoot.updateWorldMatrix(true,false);
@@ -2605,12 +2606,23 @@ function updateWeapons(dt, firingHeld){
     const dir=aimDir(), o=muzzleWorld().clone().addScaledVector(dir,.3);
     const R=bc.range;
     cryoCone.visible=true;
-    cryoCone.material.color.set(bc.color);
-    cryoCone.position.copy(o).addScaledVector(dir,R/2);
-    cryoCone.scale.set(bc.width,R,bc.width);
-    cryoCone.lookAt(_v1.copy(o).addScaledVector(dir,R+1));
+    let pr=R, pw=bc.width, op=.12+.05*Math.sin(now*22);
+    if(bc.fire){ // ПЛАМЯ ПУЛЬСИРУЕТ: язык то вытягивается, то укорачивается + сильное мерцание
+      const lick=.74+.18*(.5+.5*Math.sin(now*13))+.09*Math.sin(now*41);
+      pr=R*lick; pw=bc.width*(.82+.26*Math.sin(now*23));
+      op=clamp(.34+.2*Math.sin(now*17)+.15*Math.sin(now*57), .14, .62);
+      _flCol.set(0xff5a1e).lerp(_flCol2.set(0xffd23a), .5+.5*Math.sin(now*19)); // жёлтый↔оранжевый
+      cryoCone.material.color.copy(_flCol);
+    }else cryoCone.material.color.set(bc.color);
+    cryoCone.position.copy(o).addScaledVector(dir,pr/2);
+    cryoCone.scale.set(pw,pr,pw);
+    cryoCone.lookAt(_v1.copy(o).addScaledVector(dir,pr+1));
     cryoCone.rotateX(-Math.PI/2);
-    cryoCone.material.opacity=.12+.05*Math.sin(now*22);
+    cryoCone.material.opacity=op;
+    if(bc.fire && Math.random()<dt*16){ // языки пламени — частицы, поднимаются вверх
+      _flV.copy(o).addScaledVector(dir, rand(.2,1)*pr).add(_v3.set(rand(-1,1),rand(-1,1),rand(-1,1)).multiplyScalar(pw*.25));
+      burst(_flV, Math.random()<.5?0xff6a1e:0xffc23a, 2, 5, .35, -2, .13);
+    }
     cur.tick-=dt;
     if(cur.tick<=0){ cur.tick=.16; SFX[bc.snd](); }
     const camP=camera.getWorldPosition(_v1);
