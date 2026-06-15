@@ -225,7 +225,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '7.0.3';
+const VERSION = '7.1.0';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -770,7 +770,9 @@ const SPECIES = {
   saithe: {score:150, radius:.45, speed:2.4, max:16, len:1.1, amp:.1,  name:'сайда'},
   fry:    {score:50,  radius:.22, speed:1.8, max:28, len:.3,  amp:.03, name:'малёк'},
   golden: {score:500, radius:.9,  speed:.8,  max:4,  len:1.8, amp:.16, name:'золотая треска'},
-  fugu:   {score:-200,radius:.5,  speed:.9,  max:8,  len:.9,  amp:0,   name:'фугу'}
+  fugu:   {score:-200,radius:.5,  speed:.9,  max:8,  len:.9,  amp:0,   name:'фугу'},
+  barracuda:{score:250,radius:.4, speed:3.6, max:10, len:1.35,amp:.15, name:'барракуда'},
+  trout:  {score:170, radius:.42, speed:1.6, max:10, len:1,   amp:.1,  name:'форель'}
 };
 const _v1=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3();
 
@@ -850,6 +852,39 @@ function fuguParts(){
   for(const s of [-1,1]) P.push({geo:GEO.sphere, scl:[.07,.07,.07], pos:[s*.2,.12,.36], color:0x0a0a12});
   return P;
 }
+function barracudaParts(c){ // длинная стремительная хищница с острой мордой
+  const P=[
+    {geo:GEO.sphereHi, scl:[.16,.18,.8], grad:c.grad},                 // длинное тело
+    {geo:GEO.sphere, scl:[.13,.14,.62], pos:[0,-.05,0], color:c.belly},// светлое брюхо
+    {geo:GEO.cone, scl:[.1,.2,.1], rot:[Math.PI/2,0,0], pos:[0,0,.74], color:c.fin}, // острая морда
+    {geo:GEO.cone, scl:[.05,.26,.22], rot:[Math.PI/2,0,.5],  pos:[0,.05,-.86], color:c.fin}, // хвост-вилка
+    {geo:GEO.cone, scl:[.05,.26,.22], rot:[Math.PI/2,0,-.5], pos:[0,-.05,-.86], color:c.fin},
+    {geo:GEO.cone, scl:[.03,.16,.12], rot:[-.2,0,0], pos:[0,.18,.06], color:c.fin}, // спинной 1
+    {geo:GEO.cone, scl:[.025,.13,.1], rot:[-.2,0,0], pos:[0,.16,-.34], color:c.fin} // спинной 2
+  ];
+  for(const sd of [-1,1]){
+    P.push({geo:GEO.cone, scl:[.025,.13,.08], rot:[0,0,sd*1.2], pos:[sd*.13,-.04,.18], color:c.fin}); // грудные
+    P.push({geo:GEO.sphere, scl:[.045,.045,.045], pos:[sd*.1,.07,.52], color:0xdfeef2}); // белок
+    P.push({geo:GEO.sphere, scl:[.026,.026,.026], pos:[sd*.11,.07,.55], color:0x06080c}); // зрачок
+  }
+  return P;
+}
+function troutParts(c){ // форель: глубокое тело, спинной + жировой плавник, крап
+  const P=[
+    {geo:GEO.sphereHi, scl:[.2,.28,.6], grad:c.grad},
+    {geo:GEO.sphere, scl:[.17,.2,.5], pos:[0,-.07,0], color:c.belly},
+    {geo:GEO.cone, scl:[.05,.28,.26], rot:[Math.PI/2,0,.5],  pos:[0,.05,-.72], color:c.fin}, // хвост-вилка
+    {geo:GEO.cone, scl:[.05,.28,.26], rot:[Math.PI/2,0,-.5], pos:[0,-.05,-.72], color:c.fin},
+    {geo:GEO.cone, scl:[.035,.18,.16], rot:[-.2,0,0], pos:[0,.27,.06], color:c.fin}, // спинной
+    {geo:GEO.cone, scl:[.02,.06,.05], rot:[-.2,0,0], pos:[0,.22,-.4], color:c.fin}    // жировой плавник
+  ];
+  for(const sd of [-1,1]){
+    P.push({geo:GEO.cone, scl:[.03,.15,.1], rot:[0,0,sd*1.2], pos:[sd*.2,-.06,.22], color:c.fin}); // грудные
+    P.push({geo:GEO.sphere, scl:[.05,.05,.05], pos:[sd*.13,.07,.45], color:0xdfeef2});
+    P.push({geo:GEO.sphere, scl:[.028,.028,.028], pos:[sd*.14,.07,.48], color:0x06080c});
+  }
+  return P;
+}
 /* материал вида: Lambert + инжект виляния в вершинный шейдер.
    Код шейдера одинаков у всех видов (один программный объект),
    амплитуда/длина — юниформы конкретного материала. */
@@ -881,7 +916,9 @@ function fishMaterial(sp, emissive, rim){
 const PALETTE={
   cod:   {grad:{top:0x4f6234, bot:0xb9c49a, speck:0x33401f, density:.2}, fin:0x55663f, belly:0xe8eadc},
   saithe:{grad:{top:0x1d2b34, bot:0x7a8c96, speck:0x101a20, density:.1}, fin:0x1f2d36, belly:0x44545e},
-  golden:{grad:{top:0xe0a818, bot:0xffeec0, speck:0xfff6d8, density:.22}, fin:0xb8860b, belly:0xffe9b0}
+  golden:{grad:{top:0xe0a818, bot:0xffeec0, speck:0xfff6d8, density:.22}, fin:0xb8860b, belly:0xffe9b0},
+  barracuda:{grad:{top:0x2b3a44, bot:0xd8e2e8, speck:0x16222a, density:.08}, fin:0x3a4a54, belly:0xeef4f6},
+  trout:{grad:{top:0x4a5a2e, bot:0xd9b0a0, speck:0x1c1c12, density:.36}, fin:0x6a5a3a, belly:0xe8d4c8}
 };
 const fishSys={}, _zeroM=new THREE.Matrix4().makeScale(0,0,0), _post=new THREE.Matrix4();
 (function initFishSystem(){
@@ -891,9 +928,12 @@ const fishSys={}, _zeroM=new THREE.Matrix4().makeScale(0,0,0), _post=new THREE.M
     golden: bakeParts(codParts(PALETTE.golden), _post.makeScale(1.8,1.8,1.8)),
     fry:    bakeParts([{geo:GEO.sphere, scl:[.06,.08,.17], grad:{top:0x7da8b8, bot:0xe6f2f6}},
                        {geo:GEO.cone, scl:[.02,.1,.07], rot:[Math.PI/2,0,0], pos:[0,0,-.2], color:0x8ab4c2}]),
-    fugu:   bakeParts(fuguParts())
+    fugu:   bakeParts(fuguParts()),
+    barracuda: bakeParts(barracudaParts(PALETTE.barracuda)),
+    trout:     bakeParts(troutParts(PALETTE.trout))
   };
-  const RIMS={golden:{k:1.1,col:0xffd166}, fry:{k:.8,col:0x9fe8ff}, fugu:{k:.35,col:0xffaa66}};
+  const RIMS={golden:{k:1.1,col:0xffd166}, fry:{k:.8,col:0x9fe8ff}, fugu:{k:.35,col:0xffaa66},
+    barracuda:{k:.75,col:0xbfe0ff}, trout:{k:.45,col:0xffd0c0}};
   for(const type in geos){
     const sp=SPECIES[type], g=geos[type];
     const phase=new THREE.InstancedBufferAttribute(new Float32Array(sp.max),1);
@@ -933,6 +973,8 @@ function spawnFish(type, schoolId=null, near=null){
   f.anchor.copy(near||pickAnchor());
   f.pos.copy(f.anchor).add(_v1.set(rand(-1,1),rand(-.5,.5),rand(-1,1)));
   f.target.copy(pickAnchor());
+  if(type==='barracuda'){ f.dashT=rand(0,1); f.dash=0; f.dashMul=2; }
+  if(type==='trout'){ f.circR=rand(2,4); f.phase0=rand(0,TAU); f.jump=0; f.jumpT=rand(1,4); f.jumpDur=0; f.jumpH=0; }
   if(type==='golden'){
     f.halo=halos.find(h=>!h.visible)||null;
     if(f.halo){ f.halo.visible=true; f.halo.position.copy(f.pos); }
@@ -943,16 +985,18 @@ function spawnFish(type, schoolId=null, near=null){
 }
 let schoolSeq = 0;
 function spawnUnit(){
-  const goldChance = state.rush? .21 : .07;
+  const g = state.rush? .21 : .07;
   const r = Math.random();
-  if(r < goldChance) return spawnFish('golden');
-  if(r < goldChance+.12) return spawnFish('fugu');
-  if(r < goldChance+.27){
+  if(r < g) return spawnFish('golden');
+  if(r < g+.10) return spawnFish('fugu');
+  if(r < g+.24){
     const id = ++schoolSeq, anchor = pickAnchor(), n = 5+(Math.random()*3|0);
     for(let i=0;i<n;i++) spawnFish('fry', id, anchor);
     return;
   }
-  if(r < goldChance+.52) return spawnFish('saithe');
+  if(r < g+.40) return spawnFish('saithe');
+  if(r < g+.55) return spawnFish('barracuda');
+  if(r < g+.70) return spawnFish('trout');
   return spawnFish('cod');
 }
 function killFishVisual(f){ // спрятать инстанс и вернуть слот в пул
@@ -972,6 +1016,19 @@ function updateFish(dt){
     if(f.type==='saithe'){ // восьмёрки вокруг якоря
       const s=f.t*f.speed*.45;
       f.target.set(f.anchor.x+Math.sin(s)*3, f.anchor.y+Math.sin(s*2)*1.2, f.anchor.z+Math.sin(s*2)*2.2);
+    }else if(f.type==='barracuda'){ // рандомные рывки с резкой сменой направления
+      f.dashT-=dt;
+      if(f.dashT<=0){
+        f.target.set(f.anchor.x+rand(-7,7), clamp(f.anchor.y+rand(-3,3),-2,6), f.anchor.z+rand(-7,7));
+        f.dashT=rand(.5,1.6); f.dash=rand(.25,.5); f.dashMul=rand(1.8,3);
+        f.anchor.x+=rand(-2,2); f.anchor.z+=rand(-2,2);
+      }
+    }else if(f.type==='trout'){ // круг + случайные прыжки-скачки
+      const cs=f.t*f.speed*.5+f.phase0;
+      f.jumpT-=dt;
+      if(f.jumpT<=0 && f.jump<=0){ f.jumpDur=rand(.45,.85); f.jump=f.jumpDur; f.jumpH=rand(1.6,3.2); f.jumpT=rand(2,5)+f.jumpDur; }
+      let jy=0; if(f.jump>0){ f.jump-=dt; jy=f.jumpH*Math.sin((1-f.jump/f.jumpDur)*Math.PI); }
+      f.target.set(f.anchor.x+Math.cos(cs)*f.circR, f.anchor.y+jy, f.anchor.z+Math.sin(cs)*f.circR);
     }else if(f.school){ // boids: к якорю + разделение + выравнивание
       _v2.set(0,0,0); _v3.set(0,0,0); let n=0;
       for(const o of fishes){
@@ -986,9 +1043,13 @@ function updateFish(dt){
     }else if(p.distanceToSquared(f.target)<1.5){
       f.target.copy(pickAnchor());
     }
-    // steering к цели
-    _v1.copy(f.target).sub(p).normalize().multiplyScalar(f.speed);
-    f.vel.lerp(_v1, clamp(dt*(f.fear>0?6:1.4),0,1));
+    // steering к цели; барракуда — рывки и резкие повороты, форель — щелчок прыжка
+    let spd=f.speed, turnK=f.fear>0?6:1.4;
+    if(f.type==='barracuda'){
+      if(f.dash>0){ f.dash-=dt; spd*=f.dashMul; turnK=9; } else { spd*=.55; turnK=3; }
+    }else if(f.type==='trout' && f.jump>0){ spd*=1.7; turnK=5; }
+    _v1.copy(f.target).sub(p).normalize().multiplyScalar(spd);
+    f.vel.lerp(_v1, clamp(dt*turnK,0,1));
     if(f.fear>0) f.fear-=dt;
     if(f.cold>0) f.cold-=dt; else if(f.freezeAcc>0) f.freezeAcc=Math.max(0,f.freezeAcc-dt*.7);
     p.addScaledVector(f.vel, dt*(f.cold>0?.3:1)); // в крио-луче рыба вязнет
@@ -1016,6 +1077,15 @@ function updateFish(dt){
   const gk=.5+.5*Math.sin(now*4);
   fishSys.golden.mat.emissive.setRGB(.4+.3*gk, .25+.2*gk, 0);
   fishSys.fugu.mat.emissive.setRGB((.5+.5*Math.sin(now*8))>.6?.8:0, 0, 0);
+}
+function alertBarracudas(){ // звук стрельбы → резкий рывок в случайную сторону
+  for(const f of fishes){
+    if(f.type!=='barracuda') continue;
+    if(f.dash<=0 || Math.random()<.5){
+      f.dash=rand(.3,.6); f.dashMul=rand(2.6,3.8); f.dashT=f.dash+rand(.1,.4);
+      f.target.set(f.pos.x+rand(-6,6), clamp(f.pos.y+rand(-2,3),-2,6), f.pos.z+rand(-6,6));
+    }
+  }
 }
 function scareNear(point, r){
   for(const f of fishes){
@@ -2377,6 +2447,7 @@ function tryFire(){
   wcool=wd.cd||.2;
   state.shots++;
   FIRE[curWeapon]();
+  alertBarracudas();
   $('cross').classList.add('fire'); setTimeout(()=>$('cross').classList.remove('fire'),60);
 }
 function startCharge(){
@@ -2396,6 +2467,7 @@ function releaseCharge(){
   }
   wd.charge=0;
   RELEASE[curWeapon]();
+  alertBarracudas();
   $('cross').classList.add('fire'); setTimeout(()=>$('cross').classList.remove('fire'),90);
 }
 
@@ -2831,6 +2903,7 @@ function endRound(){
     ['Лучшее комбо','×'+Math.max(1,state.bestCombo)],
     ['Точность',Math.round(acc*100)+'%'+(bonus?' (+'+bonus+')':'')],
     ['🐟 Треска',k.cod||0],['🐟 Сайда',k.saithe||0],['🐠 Мальки',k.fry||0],
+    ['🗡 Барракуда',k.barracuda||0],['🐟 Форель',k.trout||0],
     ['✨ Золотые',k.golden||0],['🐋 Левиафан',k.whale||0],['💣 Фугу',k.fugu||0],
     ['Всего очков за всё время',save.total]
   ];
