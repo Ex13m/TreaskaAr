@@ -1,7 +1,7 @@
 /* Подстрели треску — service worker.
    HTML/навигация — network-first (всегда свежая версия при онлайне),
    остальные ассеты — cache-first (быстро + офлайн). */
-const CACHE = 'treska-v22';
+const CACHE = 'treska-v23';
 const CORE = [
   './',
   './index.html',
