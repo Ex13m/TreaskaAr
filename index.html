@@ -238,7 +238,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '7.2.3';
+const VERSION = '7.2.4';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -993,13 +993,15 @@ for(let i=0;i<SPECIES.golden.max;i++){
 
 const fishes=[];
 const FISH_LABEL={cod:'🐟 ТРЕСКА', saithe:'🐟 САЙДА', fry:'🐠 СТАЯ МАЛЬКОВ',
-  golden:'✨ ЗОЛОТАЯ ТРЕСКА', fugu:'💣 ФУГУ — НЕ СТРЕЛЯЙ', barracuda:'🗡 БАРРАКУДА', trout:'🐟 ФОРЕЛЬ'};
+  golden:'✨ ЗОЛОТАЯ ТРЕСКА', fugu:'💣 ФУГУ — НЕ СТРЕЛЯЙ', barracuda:'🗡 БАРРАКУДА', trout:'🐟 ФОРЕЛЬ', whale:'🐋 ЛЕВИАФАН'};
 const _annCD={};
-function announceFish(type){ // на секунду показать имя вида внизу, потом улетает вверх и тает
+let _annGlobal=0;
+function announceFish(type){ // подпись вида внизу — по ФАКТУ попадания в эту рыбу
   const lbl=FISH_LABEL[type]; if(!lbl) return;
   const tnow=performance.now();
-  if(_annCD[type] && tnow-_annCD[type]<6000) return; // не спамить одним видом
-  _annCD[type]=tnow;
+  if(tnow-_annGlobal<1100) return;                   // дать дочитать предыдущую
+  if(_annCD[type] && tnow-_annCD[type]<5000) return; // один вид подряд — не спамить
+  _annGlobal=tnow; _annCD[type]=tnow;
   const el=$('fishName'); if(!el) return;
   el.textContent=lbl;
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); // перезапуск анимации
@@ -1028,7 +1030,6 @@ function spawnFish(type, schoolId=null, near=null){
     SFX.fanfare(f.pos); toast('✨ ЗОЛОТАЯ ТРЕСКА!', 1200);
   }
   fishes.push(f);
-  if(type!=='cod') announceFish(type); // объявить вид (треску не спамим — она базовая)
   return f;
 }
 let schoolSeq = 0;
@@ -1206,7 +1207,7 @@ function hitWhale(weapon, dmg=1){
   if(whale.hp<=0){
     whale.active=false; whale.g.visible=false;
     const pts=1500*mult; state.score+=pts;
-    state.kills.whale=(state.kills.whale||0)+1;
+    state.kills.whale=(state.kills.whale||0)+1; announceFish('whale');
     burst(pos,0x9fdfff,6,36,1.2,2,.25); burst(pos,0xffffff,8,30,1,4,.15);
     shockRing(pos,0x9fdfff); screenFlash('gold');
     SFX.horn(pos); SFX.trophy(pos); vibrate([40,40,80,40,120]);
@@ -2642,6 +2643,7 @@ const HIT_COLORS={freeze:0xbfeaff};
 for(const k in W) HIT_COLORS[k]=W[k].color;
 function hitFish(f, weapon, ptsScale=1, viaAoe=false){
   if(!f.alive) return;
+  announceFish(f.type); // подпись = реально подбитая рыба, не «что заспавнилось»
   const sp=SPECIES[f.type], pos=f.pos.clone();
   killFishVisual(f);
   if(f.type==='fugu'){
