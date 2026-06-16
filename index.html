@@ -97,6 +97,7 @@
   .arrow{position:absolute;width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;
     border-bottom:15px solid var(--teal);filter:drop-shadow(0 0 6px var(--teal));opacity:.85;will-change:transform}
   .arrow.gold{border-bottom-color:var(--gold);filter:drop-shadow(0 0 8px var(--gold))}
+  .arrow.warn{border-bottom-color:var(--red);filter:drop-shadow(0 0 7px var(--red))}
   #flash{position:fixed;inset:0;z-index:4;pointer-events:none;opacity:0;
     background:radial-gradient(ellipse at center,transparent 55%,rgba(25,240,255,.45) 100%)}
   #flash.red{background:radial-gradient(ellipse at center,transparent 45%,rgba(255,40,70,.6) 100%)}
@@ -238,7 +239,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
    рыбы собраны из примитивов, звук синтезирован WebAudio.
    ============================================================ */
 
-const VERSION = '7.3.2';
+const VERSION = '7.4.0';
 const ARSENAL = true; // весь арсенал открыт; вернуть прогрессию: поставить false (?arsenal останется работать)
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
@@ -374,9 +375,8 @@ const _z=new THREE.Vector3(0,0,1), _e=new THREE.Euler(), _q0=new THREE.Quaternio
       _q1=new THREE.Quaternion(-Math.SQRT1_2,0,0,Math.SQRT1_2), _qy=new THREE.Quaternion(),
       UP=new THREE.Vector3(0,1,0);
 const _qPrevRaw=new THREE.Quaternion(), _qDelta=new THREE.Quaternion(),
-      _qInv=new THREE.Quaternion(), _qPred=new THREE.Quaternion();
+      _qInv=new THREE.Quaternion(), _qPred=new THREE.Quaternion(), _qDisp=new THREE.Quaternion();
 let camHavePrev=false;
-const PREDICT=0.35; // доля кадра вперёд: компенсирует задержку сенсор→экран
 function gyroQuat(q){
   const o = ((screen.orientation && screen.orientation.angle) || window.orientation || 0)*DEG;
   _e.set(gyro.beta*DEG, gyro.alpha*DEG, -gyro.gamma*DEG, 'YXZ');
@@ -388,18 +388,20 @@ function updateCamera(){
   if(gyro.has){
     gyroQuat(camera.quaternion);
     camera.quaternion.premultiply(_qy.setFromAxisAngle(UP, look.dragYaw));
-    // лёгкое предсказание: экстраполируем поворот на долю кадра, мир «прилипает»
-    // при свинге и рыба не уплывает вслед за прицелом из-за задержки сенсора
+    // адаптивный фильтр (1€-подобный): на быстром свинге — лёгкий прогноз
+    // (срезает лаг), у покоя — сглаживание (гасит дрожь сенсора, прицел чётко
+    // садится на рыбу). Прогноз гаснет к остановке → нет перелёта при наводке.
     if(camHavePrev){
       _qInv.copy(_qPrevRaw).invert();
-      _qDelta.copy(camera.quaternion).multiply(_qInv);          // поворот за кадр
+      _qDelta.copy(camera.quaternion).multiply(_qInv);          // поворот за кадр (по «сырой»)
       _qPrevRaw.copy(camera.quaternion);
-      const ang=2*Math.acos(Math.min(1,Math.abs(_qDelta.w)));   // его величина
-      if(ang>0.0002 && ang<0.25){                               // только плавное движение (до ~14°/кадр)
-        _qPred.identity().slerp(_qDelta, PREDICT);
-        camera.quaternion.premultiply(_qPred);
-      }
-    }else{ _qPrevRaw.copy(camera.quaternion); camHavePrev=true; }
+      const ang=2*Math.acos(Math.min(1,Math.abs(_qDelta.w)));   // угловая скорость
+      const predK=(ang<0.4)?0.22*clamp((ang-0.006)/0.03,0,1):0; // прогноз только на быстром движении
+      if(predK>0.001){ _qPred.identity().slerp(_qDelta, predK); camera.quaternion.premultiply(_qPred); }
+      const smK=0.4*(1-clamp((ang-0.0015)/0.011,0,1));          // сглаживание сильнее у покоя
+      if(smK>0.001) camera.quaternion.slerp(_qDisp, smK);
+      _qDisp.copy(camera.quaternion);
+    }else{ _qPrevRaw.copy(camera.quaternion); _qDisp.copy(camera.quaternion); camHavePrev=true; }
   }else{
     _e.set(look.pitch, look.yaw, 0, 'YXZ');
     camera.quaternion.setFromEuler(_e);
@@ -2061,7 +2063,7 @@ function muzzleWorld(){
 const ray = new THREE.Raycaster();
 function aimDir(){ return camera.getWorldDirection(_v3).clone(); }
 /* «супернаведение»: мягкий магнетизм прицела; фугу не притягивает */
-function assistDir(dir, maxAngle=3*DEG, bend=.6){
+function assistDir(dir, maxAngle=4*DEG, bend=.68){
   let best=null, bestAng=maxAngle;
   for(const f of fishes){
     if(!f.alive || f.type==='fugu') continue;
@@ -2072,7 +2074,7 @@ function assistDir(dir, maxAngle=3*DEG, bend=.6){
   if(best) dir.lerp(best,bend).normalize();
   return dir;
 }
-function convergedDir(origin, dist=25, assist=3){
+function convergedDir(origin, dist=25, assist=4){
   const dir=assistDir(aimDir(), assist*DEG);
   return camera.getWorldPosition(_v1).clone().addScaledVector(dir,dist).sub(origin).normalize();
 }
@@ -3041,7 +3043,7 @@ function updateGame(dt){
 
 /* ---------------- радар за кадром ---------------- */
 const arrows=[];
-for(let i=0;i<3;i++){
+for(let i=0;i<6;i++){
   const a=document.createElement('div'); a.className='arrow'; a.style.display='none';
   $('radarLayer').appendChild(a); arrows.push(a);
 }
@@ -3058,20 +3060,23 @@ function updateRadar(){
       _v2.copy(f.pos).project(camera);
       off=Math.abs(_v2.x)>.95||Math.abs(_v2.y)>.92;
     }
-    if(off) cands.push({f, x:_v1.x, y:_v1.y, gold:f.type==='golden', d:_v1.length()});
+    if(off){
+      const prio = f.type==='golden'?2 : (f.type==='barracuda'||f.type==='trout'?1:0);
+      cands.push({f, x:_v1.x, y:_v1.y, prio, gold:f.type==='golden', d:_v1.length()});
+    }
   }
   if(whale.active){ // левиафан — высший приоритет стрелки
     _v1.copy(whale.g.position).applyMatrix4(inv);
     let off=_v1.z>0;
     if(!off){ _v2.copy(whale.g.position).project(camera); off=Math.abs(_v2.x)>.95||Math.abs(_v2.y)>.92; }
-    if(off) cands.push({x:_v1.x, y:_v1.y, gold:true, d:0});
+    if(off) cands.push({x:_v1.x, y:_v1.y, prio:3, gold:true, d:0});
   }
-  cands.sort((a,b)=>(b.gold-a.gold)||(a.d-b.d));
+  cands.sort((a,b)=>(b.prio-a.prio)||(a.d-b.d));
   for(let i=0;i<arrows.length;i++){
     const a=arrows[i], c=cands[i];
     if(!c){ a.style.display='none'; continue; }
     a.style.display='block';
-    a.className='arrow'+(c.gold?' gold':'');
+    a.className='arrow'+(c.gold?' gold':(c.prio===1?' warn':''));
     let dx=c.x, dy=-c.y;
     const L=Math.hypot(dx,dy)||1; dx/=L; dy/=L;
     const cx=innerWidth/2, cy=innerHeight/2;
